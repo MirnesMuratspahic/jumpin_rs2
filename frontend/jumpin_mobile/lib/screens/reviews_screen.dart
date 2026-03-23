@@ -1,0 +1,461 @@
+import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import '../models/review.dart';
+import '../providers/review_provider.dart';
+import '../providers/auth_provider.dart';
+
+class ReviewsScreen extends StatefulWidget {
+  final AuthProvider authProvider;
+  final int? targetUserId;
+  final String? targetUserName;
+
+  const ReviewsScreen({
+    super.key,
+    required this.authProvider,
+    this.targetUserId,
+    this.targetUserName,
+  });
+
+  @override
+  State<ReviewsScreen> createState() => _ReviewsScreenState();
+}
+
+class _ReviewsScreenState extends State<ReviewsScreen>
+    with SingleTickerProviderStateMixin {
+  late TabController _tabController;
+  final _reviewProvider = ReviewProvider();
+  List<Review> _receivedReviews = [];
+  List<Review> _givenReviews = [];
+  bool _isLoading = true;
+
+  static const Color _primaryColor = Color(0xFF1565C0);
+
+  @override
+  void initState() {
+    super.initState();
+    _reviewProvider.setToken(widget.authProvider.token);
+    _tabController = TabController(length: 2, vsync: this);
+    _loadReviews();
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadReviews() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    final userId = widget.authProvider.currentUser?.id;
+    if (userId != null) {
+      final received =
+          await _reviewProvider.getReviews(reviewedUserId: userId);
+      final given = await _reviewProvider.getReviews(reviewerId: userId);
+      setState(() {
+        _receivedReviews = received;
+        _givenReviews = given;
+        _isLoading = false;
+      });
+    } else {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  void _showWriteReviewDialog() {
+    final commentController = TextEditingController();
+    int selectedRating = 5;
+    final targetUserIdController = TextEditingController(
+      text: widget.targetUserId?.toString() ?? '',
+    );
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Write a Review'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (widget.targetUserId == null) ...[
+                  TextField(
+                    controller: targetUserIdController,
+                    keyboardType: TextInputType.number,
+                    decoration: InputDecoration(
+                      labelText: 'User ID to review',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                ] else ...[
+                  Text(
+                    'Reviewing: ${widget.targetUserName ?? 'User #${widget.targetUserId}'}',
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 16),
+                ],
+                const Text(
+                  'Rating',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: List.generate(5, (index) {
+                    return GestureDetector(
+                      onTap: () {
+                        setDialogState(() {
+                          selectedRating = index + 1;
+                        });
+                      },
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        child: Icon(
+                          index < selectedRating
+                              ? Icons.star
+                              : Icons.star_border,
+                          color: Colors.amber,
+                          size: 36,
+                        ),
+                      ),
+                    );
+                  }),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: commentController,
+                  maxLines: 3,
+                  decoration: InputDecoration(
+                    labelText: 'Comment (optional)',
+                    hintText: 'Write your review...',
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                final reviewerId = widget.authProvider.currentUser?.id;
+                if (reviewerId == null) return;
+
+                final reviewedUserId = widget.targetUserId ??
+                    int.tryParse(targetUserIdController.text);
+                if (reviewedUserId == null) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Please enter a valid user ID'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                  return;
+                }
+
+                final success = await _reviewProvider.createReview(
+                  reviewerId: reviewerId,
+                  reviewedUserId: reviewedUserId,
+                  rating: selectedRating,
+                  comment: commentController.text.isNotEmpty
+                      ? commentController.text.trim()
+                      : null,
+                );
+
+                if (mounted) Navigator.pop(context);
+
+                if (mounted) {
+                  if (success) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Review submitted successfully!'),
+                        backgroundColor: Colors.green,
+                      ),
+                    );
+                    _loadReviews();
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Could not submit review. You may have already reviewed this user or tried to review yourself.'),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                  }
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _primaryColor,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Submit'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _deleteReview(Review review) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Review'),
+        content: const Text('Are you sure you want to delete this review?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Delete', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || review.id == null) return;
+
+    final success = await _reviewProvider.deleteReview(review.id!);
+    if (mounted) {
+      if (success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Review deleted'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        _loadReviews();
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Could not delete the review. Please try again later.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.grey[50],
+      appBar: AppBar(
+        title: const Text('Reviews'),
+        backgroundColor: _primaryColor,
+        foregroundColor: Colors.white,
+        bottom: TabBar(
+          controller: _tabController,
+          indicatorColor: Colors.white,
+          labelColor: Colors.white,
+          unselectedLabelColor: Colors.white70,
+          tabs: [
+            Tab(text: 'Received (${_receivedReviews.length})'),
+            Tab(text: 'Given (${_givenReviews.length})'),
+          ],
+        ),
+      ),
+      body: _isLoading
+          ? const Center(
+              child: CircularProgressIndicator(color: _primaryColor),
+            )
+          : TabBarView(
+              controller: _tabController,
+              children: [
+                _buildReviewList(_receivedReviews, isReceived: true),
+                _buildReviewList(_givenReviews, isReceived: false),
+              ],
+            ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _showWriteReviewDialog,
+        backgroundColor: _primaryColor,
+        foregroundColor: Colors.white,
+        icon: const Icon(Icons.rate_review),
+        label: const Text('Write Review'),
+      ),
+    );
+  }
+
+  Widget _buildReviewList(List<Review> reviews, {required bool isReceived}) {
+    if (reviews.isEmpty) {
+      return RefreshIndicator(
+        onRefresh: _loadReviews,
+        color: _primaryColor,
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          child: Container(
+            height: MediaQuery.of(context).size.height - 300,
+            alignment: Alignment.center,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  isReceived ? Icons.star_border : Icons.rate_review,
+                  size: 80,
+                  color: Colors.grey[400],
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  isReceived ? 'No reviews received' : 'No reviews given',
+                  style: TextStyle(fontSize: 18, color: Colors.grey[600]),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Pull down to refresh',
+                  style: TextStyle(fontSize: 14, color: Colors.grey[500]),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    return RefreshIndicator(
+      onRefresh: _loadReviews,
+      color: _primaryColor,
+      child: ListView.builder(
+        padding: const EdgeInsets.all(16),
+        physics: const AlwaysScrollableScrollPhysics(),
+        itemCount: reviews.length,
+        itemBuilder: (context, index) {
+          return _buildReviewCard(reviews[index], isReceived: isReceived);
+        },
+      ),
+    );
+  }
+
+  Widget _buildReviewCard(Review review, {required bool isReceived}) {
+    final userId = widget.authProvider.currentUser?.id;
+    final canDelete = review.reviewerId == userId;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withAlpha(15),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              CircleAvatar(
+                radius: 20,
+                backgroundColor: Colors.grey[300],
+                child: review.reviewerProfileImage != null
+                    ? ClipOval(
+                        child: Image.network(
+                          review.reviewerProfileImage!,
+                          width: 40,
+                          height: 40,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => Icon(
+                            Icons.person,
+                            color: Colors.grey[600],
+                          ),
+                        ),
+                      )
+                    : Icon(Icons.person, color: Colors.grey[600]),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      isReceived
+                          ? review.reviewerName ?? 'Anonymous'
+                          : 'To: ${review.reviewedUserName ?? 'User'}',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 15,
+                      ),
+                    ),
+                    if (review.adTitle != null)
+                      Text(
+                        'Ad: ${review.adTitle}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey[600],
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                  ],
+                ),
+              ),
+              if (canDelete && !isReceived)
+                IconButton(
+                  icon: const Icon(Icons.delete, color: Colors.red, size: 20),
+                  onPressed: () => _deleteReview(review),
+                ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              ...List.generate(5, (index) {
+                return Icon(
+                  index < review.rating ? Icons.star : Icons.star_border,
+                  color: Colors.amber,
+                  size: 20,
+                );
+              }),
+              const SizedBox(width: 8),
+              Text(
+                '${review.rating}/5',
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                ),
+              ),
+            ],
+          ),
+          if (review.comment != null && review.comment!.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(
+              review.comment!,
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.grey[700],
+                height: 1.4,
+              ),
+            ),
+          ],
+          if (review.createdAt != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              DateFormat('dd MMM yyyy').format(review.createdAt!),
+              style: TextStyle(fontSize: 12, color: Colors.grey[500]),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}

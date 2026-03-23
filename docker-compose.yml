@@ -1,0 +1,92 @@
+services:
+  webapi:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: jumpin-webapi
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:5000
+      - ConnectionStrings__DefaultConnection=Server=sql;Database=JumpInDb;User Id=sa;Password=JumpIn@2026!;TrustServerCertificate=True;
+      - RabbitMQ__Host=rabbitmq
+      - RabbitMQ__Port=5672
+      - RabbitMQ__Username=guest
+      - RabbitMQ__Password=guest
+      - Stripe__SecretKey=${STRIPE_SECRET_KEY:-sk_test_51R9thz08fWlzR7lzapDJ6ehGLcfzfA2fqWmmKopLZVNPP2Rqu7gE8K2FkIpLitb7i16how0PcGLRu5VA3BqgOgrD00LWNo7DoL}
+      - Stripe__PublishableKey=${STRIPE_PUBLISHABLE_KEY:-pk_test_51R9thz08fWlzR7lz8XnFNQ7uFfl6QmIyQ3BZYMFxI0lvHJCayA6IVpUmkot8SO0J7mm3Ac7PZhGgjagM0H10pvqm00ptQDFwW8}
+      - Stripe__WebhookSecret=${STRIPE_WEBHOOK_SECRET:-}
+      - Stripe__VipPriceAmountInCents=2000
+      - Stripe__Currency=bam
+      - Smtp__Host=${SMTP_HOST:-smtp.gmail.com}
+      - Smtp__Port=${SMTP_PORT:-587}
+      - Smtp__Username=${SMTP_USERNAME:-}
+      - Smtp__Password=${SMTP_PASSWORD:-}
+      - Smtp__UseSsl=true
+      - Smtp__SenderEmail=${SMTP_SENDER_EMAIL:-jumpin@example.com}
+      - Smtp__SenderName=JumpIn
+    ports:
+      - "5194:5000"
+    depends_on:
+      sql:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    container_name: jumpin-worker
+    environment:
+      - RabbitMQ__Host=rabbitmq
+      - RabbitMQ__Port=5672
+      - RabbitMQ__Username=guest
+      - RabbitMQ__Password=guest
+      - Smtp__Host=${SMTP_HOST:-smtp.gmail.com}
+      - Smtp__Port=${SMTP_PORT:-587}
+      - Smtp__Username=${SMTP_USERNAME:-}
+      - Smtp__Password=${SMTP_PASSWORD:-}
+      - Smtp__UseSsl=true
+      - Smtp__SenderEmail=${SMTP_SENDER_EMAIL:-jumpin@example.com}
+      - Smtp__SenderName=JumpIn
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    restart: unless-stopped
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: jumpin-rabbitmq
+    environment:
+      - RABBITMQ_DEFAULT_USER=guest
+      - RABBITMQ_DEFAULT_PASS=guest
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    healthcheck:
+      test: rabbitmq-diagnostics -q ping
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  sql:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: jumpin-sqlserver
+    environment:
+      - ACCEPT_EULA=Y
+      - MSSQL_SA_PASSWORD=JumpIn@2026!
+    ports:
+      - "1434:1433"
+    volumes:
+      - jumpin_mssqldata:/var/opt/mssql
+    healthcheck:
+      test: /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "JumpIn@2026!" -Q "SELECT 1" -C -b || /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P "JumpIn@2026!" -Q "SELECT 1" -b
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+volumes:
+  jumpin_mssqldata:
