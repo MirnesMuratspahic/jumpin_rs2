@@ -130,9 +130,28 @@ using (var scope = app.Services.CreateScope())
 {
     var services = scope.ServiceProvider;
     var context = services.GetRequiredService<JumpInDbContext>();
-    await context.Database.EnsureCreatedAsync();
-    var seeder = new DatabaseSeeder(context);
-    await seeder.SeedAsync();
+    try
+    {
+        System.Console.WriteLine("[DB] Dropping database...");
+        await context.Database.EnsureDeletedAsync();
+        System.Console.WriteLine("[DB] Creating fresh database...");
+        await context.Database.EnsureCreatedAsync();
+        System.Console.WriteLine("[DB] Database ready");
+    }
+    catch (Exception ex)
+    {
+        System.Console.WriteLine($"[DB] Error with database: {ex.Message}");
+    }
+
+    try
+    {
+        var seeder = new DatabaseSeeder(context);
+        await seeder.SeedAsync();
+    }
+    catch (Exception ex)
+    {
+        System.Console.WriteLine($"[SEED] Error during seeding: {ex.Message}");
+    }
 }
 
 // Middleware

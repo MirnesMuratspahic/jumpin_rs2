@@ -44,14 +44,14 @@ namespace JumpIn.API.Auth
 
                 var user = await _userService.LoginAsync(new LoginRequest
                 {
-                    Username = username,
+                    Email = username,
                     Password = password
                 });
 
                 var claims = new[]
                 {
                     new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
-                    new Claim(ClaimTypes.Name, user.Username),
+                    new Claim(ClaimTypes.Name, user.Email),
                     new Claim(ClaimTypes.Role, user.Role)
                 };
 
