@@ -4,10 +4,10 @@ namespace JumpIn.Models.DTOs
 {
     public class AdDTO
     {
-        public int Id { get; set; }
+        public Guid Id { get; set; }
         public string Title { get; set; }
         public string? Description { get; set; }
-        public string AdType { get; set; }
+        public string Type { get; set; }
         public decimal Price { get; set; }
         public DateTime? DateAvailable { get; set; }
         public string? TimeAvailable { get; set; }
@@ -37,11 +37,12 @@ namespace JumpIn.Models.DTOs
         public string? ImageUrl { get; set; }
         public List<AdImageDTO>? Images { get; set; }
         public bool IsActive { get; set; }
+        public string Status { get; set; } = "Active";
         public DateTime CreatedAt { get; set; }
 
         // Owner info
-        public int UserId { get; set; }
-        public string? UserName { get; set; }
+        public Guid UserId { get; set; }
+        public string? OwnerUsername { get; set; }
         public string? UserProfileImage { get; set; }
         public decimal UserRating { get; set; }
         public bool IsVipOwner { get; set; }

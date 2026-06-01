@@ -45,7 +45,7 @@ namespace JumpIn.Services.Services
             };
         }
 
-        public override AdDTO GetById(int id)
+        public override AdDTO GetById(Guid id)
         {
             var entity = _context.Ads
                 .Include(a => a.User)
@@ -114,19 +114,58 @@ namespace JumpIn.Services.Services
             entity.IsActive = true;
         }
 
+        protected override void AfterInsert(AdInsertRequest request, Ad entity)
+        {
+            var user = _context.Users.Find(request.UserId);
+            if (user != null)
+            {
+                user.TotalAds++;
+                _context.SaveChanges();
+            }
+        }
+
+        protected override void BeforeDelete(Ad entity)
+        {
+            var user = _context.Users.Find(entity.UserId);
+            if (user != null && user.TotalAds > 0)
+            {
+                user.TotalAds--;
+                _context.SaveChanges();
+            }
+        }
+
+        public async Task<AdDTO> EndAdAsync(Guid id, Guid? userId = null)
+        {
+            var entity = _context.Ads
+                .Include(a => a.User)
+                .Include(a => a.AdImages)
+                .FirstOrDefault(a => a.Id == id && !a.IsDeleted);
+
+            if (entity == null)
+                throw new UserException("Ad not found.");
+
+            if (userId.HasValue && entity.UserId != userId.Value)
+                throw new UserException("You can only end your own ads.");
+
+            entity.Status = AdStatus.Ended;
+            entity.IsActive = false;
+            _context.SaveChanges();
+
+            return MapToDto(entity);
+        }
+
         private AdDTO MapToDto(Ad entity)
         {
             var dto = entity.Adapt<AdDTO>();
-            dto.AdType = entity.AdType.ToString().ToUpper();
+            dto.Type = entity.AdType.ToString().ToUpper();
+            dto.Status = entity.Status?.ToString() ?? "Active";
 
             if (entity.User != null)
             {
-                dto.UserName = $"{entity.User.FirstName} {entity.User.LastName}";
+                dto.OwnerUsername = entity.User.Email;
                 dto.UserProfileImage = entity.User.ProfileImageUrl;
                 dto.IsVipOwner = entity.User.IsVip;
-
-                var reviews = _context.Reviews.Where(r => r.ReviewedUserId == entity.UserId);
-                dto.UserRating = reviews.Any() ? (decimal)reviews.Average(r => r.Rating) : 0;
+                dto.UserRating = entity.User.AverageRating;
             }
 
             if (entity.AdImages != null && entity.AdImages.Any())
