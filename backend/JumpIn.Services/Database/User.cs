@@ -4,10 +4,9 @@ namespace JumpIn.Services.Database
 {
     public class User : ISoftDeletable
     {
-        public int Id { get; set; }
+        public Guid Id { get; set; }
         public string FirstName { get; set; }
         public string LastName { get; set; }
-        public string Username { get; set; }
         public string Email { get; set; }
         public string PasswordHash { get; set; }
         public string? Phone { get; set; }
@@ -23,6 +22,8 @@ namespace JumpIn.Services.Database
         public DateTime? VipExpiresAt { get; set; }
         public string? StripeCustomerId { get; set; }
         public string? StripeSubscriptionId { get; set; }
+        public decimal AverageRating { get; set; } = 0;
+        public int TotalAds { get; set; } = 0;
 
         // Soft delete
         public bool IsDeleted { get; set; }

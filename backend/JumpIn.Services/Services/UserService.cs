@@ -25,9 +25,6 @@ namespace JumpIn.Services.Services
         {
             query = query.Where(u => !u.IsDeleted);
 
-            if (!string.IsNullOrEmpty(search.Username))
-                query = query.Where(u => u.Username.ToLower().Contains(search.Username.ToLower()));
-
             if (!string.IsNullOrEmpty(search.Email))
                 query = query.Where(u => u.Email.ToLower().Contains(search.Email.ToLower()));
 
@@ -57,10 +54,6 @@ namespace JumpIn.Services.Services
             var existingEmail = _context.Users.Any(u => u.Email.ToLower() == request.Email.ToLower() && !u.IsDeleted);
             if (existingEmail)
                 throw new UserException("A user with this email already exists.");
-
-            var existingUsername = _context.Users.Any(u => u.Username.ToLower() == request.Username.ToLower() && !u.IsDeleted);
-            if (existingUsername)
-                throw new UserException("A user with this username already exists.");
 
             entity.PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password);
             entity.RegistrationDate = DateTime.UtcNow;
@@ -93,14 +86,6 @@ namespace JumpIn.Services.Services
                 entity.Email = request.Email;
             }
 
-            if (!string.IsNullOrEmpty(request.Username) && request.Username.ToLower() != entity.Username.ToLower())
-            {
-                var existingUsername = _context.Users.Any(u => u.Username.ToLower() == request.Username.ToLower() && u.Id != entity.Id && !u.IsDeleted);
-                if (existingUsername)
-                    throw new UserException("A user with this username already exists.");
-                entity.Username = request.Username;
-            }
-
             if (!string.IsNullOrEmpty(request.Password))
             {
                 if (request.Password != request.PasswordConfirmation)
@@ -114,7 +99,16 @@ namespace JumpIn.Services.Services
             if (request.ProfileImageUrl != null) entity.ProfileImageUrl = request.ProfileImageUrl;
         }
 
-        public override UserModel Update(int id, UserUpdateRequest request)
+        public override UserModel GetById(Guid id)
+        {
+            var entity = _context.Users.Find(id);
+            if (entity == null || entity.IsDeleted)
+                throw new UserException("User not found.");
+
+            return entity.Adapt<UserModel>();
+        }
+
+        public override UserModel Update(Guid id, UserUpdateRequest request)
         {
             var entity = _context.Users.Find(id);
             if (entity == null || entity.IsDeleted)
@@ -130,18 +124,17 @@ namespace JumpIn.Services.Services
         {
             var user = await _context.Users
                 .FirstOrDefaultAsync(u =>
-                    (u.Username.ToLower() == request.Username.ToLower() ||
-                     u.Email.ToLower() == request.Username.ToLower()) &&
+                    u.Email.ToLower() == request.Email.ToLower() &&
                     !u.IsDeleted);
 
             if (user == null)
-                throw new UserException("Invalid username or password.");
+                throw new UserException("Invalid email or password.");
 
             if (user.Status == UserStatus.Blocked)
                 throw new UserException($"Your account has been blocked. Reason: {user.BlockReason ?? "No reason provided."}");
 
             if (!BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
-                throw new UserException("Invalid username or password.");
+                throw new UserException("Invalid email or password.");
 
             user.LastLogin = DateTime.UtcNow;
             await _context.SaveChangesAsync();
@@ -149,7 +142,7 @@ namespace JumpIn.Services.Services
             return user.Adapt<UserModel>();
         }
 
-        public async Task<UserModel> BlockUserAsync(int id, BlockUserRequest request)
+        public async Task<UserModel> BlockUserAsync(Guid id, BlockUserRequest request)
         {
             var user = await _context.Users.FindAsync(id);
             if (user == null || user.IsDeleted)
@@ -163,7 +156,7 @@ namespace JumpIn.Services.Services
             return user.Adapt<UserModel>();
         }
 
-        public async Task<UserModel> UnblockUserAsync(int id)
+        public async Task<UserModel> UnblockUserAsync(Guid id)
         {
             var user = await _context.Users.FindAsync(id);
             if (user == null || user.IsDeleted)
@@ -177,7 +170,7 @@ namespace JumpIn.Services.Services
             return user.Adapt<UserModel>();
         }
 
-        public async Task<UserModel> ActivateVipAsync(int id)
+        public async Task<UserModel> ActivateVipAsync(Guid id)
         {
             var user = await _context.Users.FindAsync(id);
             if (user == null || user.IsDeleted)
@@ -191,7 +184,7 @@ namespace JumpIn.Services.Services
             return user.Adapt<UserModel>();
         }
 
-        public async Task<UserStatistics> GetUserStatisticsAsync(int id)
+        public async Task<UserStatistics> GetUserStatisticsAsync(Guid id)
         {
             var user = await _context.Users
                 .Include(u => u.Ads)
@@ -206,7 +199,7 @@ namespace JumpIn.Services.Services
 
             return new UserStatistics
             {
-                TotalAds = user.Ads.Count(a => !a.IsDeleted),
+                TotalAds = user.TotalAds,
                 ActiveAds = user.Ads.Count(a => !a.IsDeleted && a.IsActive),
                 TotalRequestsSent = user.SentRequests.Count(r => !r.IsDeleted),
                 TotalRequestsReceived = user.ReceivedRequests.Count(r => !r.IsDeleted),
@@ -214,7 +207,7 @@ namespace JumpIn.Services.Services
                 DeclinedRequests = user.ReceivedRequests.Count(r => !r.IsDeleted && r.Status == RequestStatus.Declined),
                 TotalReviewsGiven = user.ReviewsGiven.Count,
                 TotalReviewsReceived = user.ReviewsReceived.Count,
-                AverageRating = user.ReviewsReceived.Any() ? (decimal)user.ReviewsReceived.Average(r => r.Rating) : 0,
+                AverageRating = user.AverageRating,
                 IsVip = user.IsVip
             };
         }
