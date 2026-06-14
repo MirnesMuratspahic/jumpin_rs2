@@ -11,6 +11,11 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 
+// Load secrets/config from a .env file (searched up the directory tree) into
+// environment variables BEFORE the host reads configuration. In containers no
+// .env exists and values come from docker-compose env instead.
+DotNetEnv.Env.TraversePath().Load();
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Register Mapster mappings
@@ -19,9 +24,21 @@ RegisterMappings.Register();
 // CORS
 builder.Services.AddCors(options =>
 {
+    // Explicit allowed origins (configurable via Cors:AllowedOrigins in .env).
+    // The mobile/desktop clients are native apps and aren't subject to CORS;
+    // these cover browser-based tooling (Swagger, web dev).
+    var allowedOrigins = builder.Configuration["Cors:AllowedOrigins"]
+            ?.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+        ?? new[]
+        {
+            "http://localhost:5194",
+            "http://localhost:3000",
+            "http://localhost:8080"
+        };
+
     options.AddPolicy("AllowAll", policy =>
     {
-        policy.AllowAnyOrigin()
+        policy.WithOrigins(allowedOrigins)
               .AllowAnyMethod()
               .AllowAnyHeader();
     });
@@ -55,6 +72,34 @@ builder.Services.AddAuthentication(options =>
         ValidAudience = builder.Configuration["Jwt:Audience"],
         IssuerSigningKey = new SymmetricSecurityKey(
             Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]!))
+    };
+
+    // Server-side token revocation: a token is only valid while its security
+    // stamp still matches the user's current stamp (logout / password change
+    // regenerate the stamp, invalidating previously-issued tokens).
+    options.Events = new JwtBearerEvents
+    {
+        OnTokenValidated = async ctx =>
+        {
+            var db = ctx.HttpContext.RequestServices.GetRequiredService<JumpInDbContext>();
+            var idClaim = ctx.Principal?.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            if (!Guid.TryParse(idClaim, out var uid))
+            {
+                ctx.Fail("Invalid token.");
+                return;
+            }
+
+            var user = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == uid);
+            if (user == null || user.IsDeleted)
+            {
+                ctx.Fail("User no longer exists.");
+                return;
+            }
+
+            var tokenStamp = ctx.Principal?.FindFirst("sstamp")?.Value;
+            if (!string.IsNullOrEmpty(user.SecurityStamp) && user.SecurityStamp != tokenStamp)
+                ctx.Fail("Token has been revoked.");
+        }
     };
 })
 .AddScheme<AuthenticationSchemeOptions, BasicAuthenticationHandler>("BasicAuthentication", null);
@@ -117,11 +162,15 @@ builder.Services.AddScoped<IReviewService, ReviewService>();
 builder.Services.AddScoped<ISupportService, SupportService>();
 builder.Services.AddScoped<IRecommendationService, RecommendationService>();
 builder.Services.AddScoped<IPaymentService, PaymentService>();
+builder.Services.AddScoped<ISubscriptionService, SubscriptionService>();
 builder.Services.AddScoped<IFavoriteService, FavoriteService>();
 builder.Services.AddScoped<IAdImageService, AdImageService>();
 builder.Services.AddScoped<IUserPreferenceService, UserPreferenceService>();
 builder.Services.AddScoped<IActivityLogService, ActivityLogService>();
 builder.Services.AddScoped<ICityService, CityService>();
+builder.Services.AddScoped<INotificationService, NotificationService>();
+builder.Services.AddScoped<IStatisticsService, StatisticsService>();
+builder.Services.AddMemoryCache();
 
 var app = builder.Build();
 
@@ -132,25 +181,33 @@ using (var scope = app.Services.CreateScope())
     var context = services.GetRequiredService<JumpInDbContext>();
     try
     {
-        System.Console.WriteLine("[DB] Dropping database...");
-        await context.Database.EnsureDeletedAsync();
-        System.Console.WriteLine("[DB] Creating fresh database...");
-        await context.Database.EnsureCreatedAsync();
-        System.Console.WriteLine("[DB] Database ready");
+        // Apply EF Core migrations so the schema always matches the model and
+        // schema changes are tracked. Data is kept across restarts (the seeder
+        // below only inserts when the database is empty).
+        var db = context.Database;
+        if (await db.CanConnectAsync() && !(await db.GetAppliedMigrationsAsync()).Any())
+        {
+            // A legacy database created via the old EnsureCreated() approach has
+            // no migration history; drop it once so it rebuilds from migrations.
+            app.Logger.LogInformation("[DB] Legacy database detected; recreating from migrations");
+            await db.EnsureDeletedAsync();
+        }
+        await db.MigrateAsync();
+        app.Logger.LogInformation("[DB] Database migrated");
     }
     catch (Exception ex)
     {
-        System.Console.WriteLine($"[DB] Error with database: {ex.Message}");
+        app.Logger.LogError(ex, "[DB] Error initializing database");
     }
 
     try
     {
-        var seeder = new DatabaseSeeder(context);
+        var seeder = new DatabaseSeeder(context, app.Logger);
         await seeder.SeedAsync();
     }
     catch (Exception ex)
     {
-        System.Console.WriteLine($"[SEED] Error during seeding: {ex.Message}");
+        app.Logger.LogError(ex, "[SEED] Error during seeding");
     }
 }
 

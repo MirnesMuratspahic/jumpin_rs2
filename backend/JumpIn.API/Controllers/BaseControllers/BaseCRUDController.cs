@@ -15,19 +15,19 @@ namespace JumpIn.API.Controllers.BaseControllers
         }
 
         [HttpPost]
-        public TModel Insert([FromBody] TInsert request)
+        public virtual TModel Insert([FromBody] TInsert request)
         {
             return _service.Insert(request);
         }
 
         [HttpPut("{id}")]
-        public TModel Update(int id, [FromBody] TUpdate request)
+        public virtual TModel Update(Guid id, [FromBody] TUpdate request)
         {
             return _service.Update(id, request);
         }
 
         [HttpDelete("{id}")]
-        public TModel Delete(int id)
+        public virtual TModel Delete(Guid id)
         {
             return _service.Delete(id);
         }

@@ -12,5 +12,18 @@ namespace JumpIn.API.Controllers
     public class FavoriteController : BaseCRUDController<FavoriteDTO, FavoriteSearchObject, FavoriteInsertRequest, FavoriteUpdateRequest>
     {
         public FavoriteController(IFavoriteService service) : base(service) { }
+
+        public override FavoriteDTO Insert([FromBody] FavoriteInsertRequest request)
+        {
+            if (CurrentUserId != null) request.UserId = CurrentUserId.Value;
+            return _service.Insert(request);
+        }
+
+        public override FavoriteDTO Delete(Guid id)
+        {
+            var existing = _service.GetById(id);
+            EnsureOwnerOrAdmin(existing.UserId);
+            return _service.Delete(id);
+        }
     }
 }

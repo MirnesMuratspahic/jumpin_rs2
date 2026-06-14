@@ -31,7 +31,8 @@ namespace JumpIn.API.Auth
             {
                 new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
                 new Claim(ClaimTypes.Name, user.Email),
-                new Claim(ClaimTypes.Role, user.Role)
+                new Claim(ClaimTypes.Role, user.Role),
+                new Claim("sstamp", user.SecurityStamp ?? "")
             };
 
             var token = new JwtSecurityToken(

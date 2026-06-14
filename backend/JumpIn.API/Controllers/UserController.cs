@@ -1,5 +1,7 @@
 using JumpIn.API.Auth;
 using JumpIn.API.Controllers.BaseControllers;
+using JumpIn.API.Helpers;
+using JumpIn.Models.Constants;
 using JumpIn.Models.DTOs;
 using JumpIn.Models.HelperClasses;
 using JumpIn.Models.Requests;
@@ -40,14 +42,70 @@ namespace JumpIn.API.Controllers
             return _service.Insert(request);
         }
 
-        [Authorize(Roles = "ADMIN")]
+        [AllowAnonymous]
+        [HttpPost("forgot-password")]
+        public async Task<IActionResult> ForgotPassword([FromBody] ForgotPasswordRequest request)
+        {
+            await _userService.RequestPasswordResetAsync(request.Email);
+            // Always 200 — never reveal whether an account with that email exists.
+            return Ok(new { message = "If an account with that email exists, a reset code has been sent." });
+        }
+
+        [AllowAnonymous]
+        [HttpPost("reset-password")]
+        public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordRequest request)
+        {
+            await _userService.ResetPasswordAsync(request);
+            return Ok(new { message = "Your password has been reset. You can now log in." });
+        }
+
+        [HttpPost("logout")]
+        public async Task<IActionResult> Logout()
+        {
+            if (CurrentUserId == null) return Unauthorized();
+            // Invalidates all previously-issued tokens for this user server-side.
+            await _userService.LogoutAsync(CurrentUserId.Value);
+            return Ok(new { message = "Logged out." });
+        }
+
+        [HttpPost("{id}/change-password")]
+        public async Task<IActionResult> ChangePassword(Guid id, [FromBody] ChangePasswordRequest request)
+        {
+            EnsureOwnerOrAdmin(id);
+            // Changing your OWN password requires the current password; an admin
+            // changing another user's does not.
+            var requireCurrent = CurrentUserId == id;
+            await _userService.ChangePasswordAsync(id, request, requireCurrent);
+            return Ok(new { message = "Password changed successfully." });
+        }
+
+        [Authorize(Roles = RoleNames.Admin)]
+        public override UserModel Insert([FromBody] UserInsertRequest request)
+        {
+            return _service.Insert(request);
+        }
+
+        public override UserModel Update(Guid id, [FromBody] UserUpdateRequest request)
+        {
+            // A user may edit only their own profile; admins may edit anyone.
+            EnsureOwnerOrAdmin(id);
+            return _service.Update(id, request);
+        }
+
+        [Authorize(Roles = RoleNames.Admin)]
+        public override UserModel Delete(Guid id)
+        {
+            return _service.Delete(id);
+        }
+
+        [Authorize(Roles = RoleNames.Admin)]
         [HttpPost("{id}/block")]
         public async Task<UserModel> BlockUser(Guid id, [FromBody] BlockUserRequest request)
         {
             return await _userService.BlockUserAsync(id, request);
         }
 
-        [Authorize(Roles = "ADMIN")]
+        [Authorize(Roles = RoleNames.Admin)]
         [HttpPost("{id}/unblock")]
         public async Task<UserModel> UnblockUser(Guid id)
         {
@@ -57,6 +115,7 @@ namespace JumpIn.API.Controllers
         [HttpPost("{id}/activate-vip")]
         public async Task<UserModel> ActivateVip(Guid id)
         {
+            EnsureOwnerOrAdmin(id);
             return await _userService.ActivateVipAsync(id);
         }
 
@@ -85,18 +144,19 @@ namespace JumpIn.API.Controllers
         [HttpPost("upload-image")]
         public async Task<IActionResult> UploadProfileImage(IFormFile file, [FromServices] IWebHostEnvironment environment)
         {
-            if (file == null || file.Length == 0)
-                return BadRequest("No file provided");
+            var (ok, error) = ImageFileValidator.Validate(file);
+            if (!ok)
+                return BadRequest(new { message = error });
 
             try
             {
-                var fileName = Path.GetFileName(file.FileName);
+                var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
                 var uploadDir = Path.Combine(environment.WebRootPath, "uploads", "profile-images");
 
                 if (!Directory.Exists(uploadDir))
                     Directory.CreateDirectory(uploadDir);
 
-                var uniqueFileName = $"{Guid.NewGuid()}_{fileName}";
+                var uniqueFileName = $"{Guid.NewGuid()}{extension}";
                 var filePath = Path.Combine(uploadDir, uniqueFileName);
 
                 using (var stream = new FileStream(filePath, FileMode.Create))
@@ -116,6 +176,8 @@ namespace JumpIn.API.Controllers
         [HttpPut("{id}/profile-image")]
         public IActionResult UpdateProfileImage(Guid id, [FromBody] ProfileImageUpdateRequest request)
         {
+            EnsureOwnerOrAdmin(id);
+
             var user = _service.GetById(id);
             if (user == null)
                 return NotFound("User not found");

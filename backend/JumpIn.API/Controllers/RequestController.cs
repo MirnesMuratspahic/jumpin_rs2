@@ -18,15 +18,49 @@ namespace JumpIn.API.Controllers
             _requestService = service;
         }
 
-        [HttpPost("{id}/accept")]
-        public async Task<RequestDTO> AcceptRequest(int id)
+        public override RequestDTO Insert([FromBody] RequestInsertRequest request)
         {
+            // Sender always comes from the authenticated user, never the request body.
+            if (CurrentUserId != null) request.SenderId = CurrentUserId.Value;
+            return _service.Insert(request);
+        }
+
+        public override RequestDTO GetById(Guid id)
+        {
+            var existing = _service.GetById(id);
+            EnsureOwnerOrAdmin(existing.SenderId, existing.ReceiverId);
+            return existing;
+        }
+
+        public override RequestDTO Update(Guid id, [FromBody] RequestUpdateRequest request)
+        {
+            var existing = _service.GetById(id);
+            EnsureOwnerOrAdmin(existing.SenderId, existing.ReceiverId);
+            return _service.Update(id, request);
+        }
+
+        public override RequestDTO Delete(Guid id)
+        {
+            var existing = _service.GetById(id);
+            EnsureOwnerOrAdmin(existing.SenderId, existing.ReceiverId);
+            return _service.Delete(id);
+        }
+
+        [HttpPost("{id}/accept")]
+        public async Task<RequestDTO> AcceptRequest(Guid id)
+        {
+            // Only the receiver of the request (or an admin) may accept it.
+            var existing = _service.GetById(id);
+            EnsureOwnerOrAdmin(existing.ReceiverId);
             return await _requestService.AcceptRequestAsync(id);
         }
 
         [HttpPost("{id}/decline")]
-        public async Task<RequestDTO> DeclineRequest(int id)
+        public async Task<RequestDTO> DeclineRequest(Guid id)
         {
+            // Only the receiver of the request (or an admin) may decline it.
+            var existing = _service.GetById(id);
+            EnsureOwnerOrAdmin(existing.ReceiverId);
             return await _requestService.DeclineRequestAsync(id);
         }
     }

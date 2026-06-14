@@ -1,3 +1,4 @@
+using JumpIn.Models.Constants;
 using JumpIn.Models.DTOs;
 using JumpIn.Models.SearchObjects;
 using JumpIn.Services.Interfaces;
@@ -8,7 +9,7 @@ namespace JumpIn.API.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = RoleNames.Admin)]
     public class ActivityLogController : ControllerBase
     {
         private readonly IActivityLogService _activityLogService;
@@ -25,13 +26,13 @@ namespace JumpIn.API.Controllers
         }
 
         [HttpGet("{id}")]
-        public IActionResult GetById(int id)
+        public IActionResult GetById(Guid id)
         {
             return Ok(_activityLogService.GetById(id));
         }
 
         [HttpGet("user/{userId}")]
-        public async Task<IActionResult> GetByUser(int userId, [FromQuery] int count = 20)
+        public async Task<IActionResult> GetByUser(Guid userId, [FromQuery] int count = 20)
         {
             return Ok(await _activityLogService.GetByUserAsync(userId, count));
         }
