@@ -1,38 +1,38 @@
 # JumpIn
 
-Online marketplace and reservation platform for ride-sharing, car rentals, and apartment rentals.
+Online platforma za oglašavanje i rezervacije za dijeljenje vožnji, iznajmljivanje automobila i iznajmljivanje stanova.
 
-## Technologies
+## Tehnologije
 
-- **Backend**: ASP.NET Core 8.0, Entity Framework Core, SQL Server
-- **Mobile App**: Flutter (Android/iOS)
-- **Desktop App**: Flutter (Windows/macOS/Linux)
-- **Message Broker**: RabbitMQ
-- **Payments**: Stripe
-- **Authentication**: JWT + Basic Auth
+- **Backend**: ASP.NET Core 10.0, Entity Framework Core, SQL Server
+- **Mobilna aplikacija**: Flutter (Android/iOS)
+- **Desktop aplikacija**: Flutter (Windows/macOS/Linux)
+- **Message broker**: RabbitMQ
+- **Plaćanja**: Stripe
+- **Autentifikacija**: JWT + Basic Auth
 
-## Prerequisites
+## Preduslovi
 
-- Docker & Docker Compose
-- Flutter SDK (for mobile/desktop apps)
-- .NET 8.0 SDK (for local development)
+- Docker i Docker Compose
+- Flutter SDK (za mobilnu/desktop aplikaciju)
+- .NET 10.0 SDK (za lokalni razvoj)
 
-## Getting Started
+## Pokretanje
 
-### 1. Start backend services with Docker
+### 1. Pokretanje backend servisa pomoću Docker-a
 
 ```bash
 cd backend
 docker-compose up --build
 ```
 
-This starts:
-- **API** on `http://localhost:5194`
-- **SQL Server** on port `1433`
-- **RabbitMQ** on port `5672` (Management UI: `http://localhost:15672`)
-- **Worker** service (email/notification consumer)
+Ovo pokreće:
+- **API** na `http://localhost:5194`
+- **SQL Server** na portu `1434`
+- **RabbitMQ** na portu `5672` (Management UI: `http://localhost:15672`)
+- **Worker** servis (consumer za e-mail/notifikacije)
 
-### 2. Run the Mobile App
+### 2. Pokretanje mobilne aplikacije
 
 ```bash
 cd frontend/jumpin_mobile
@@ -40,12 +40,12 @@ flutter pub get
 flutter run
 ```
 
-With custom API URL:
+Sa prilagođenim API URL-om:
 ```bash
 flutter run --dart-define=API_URL=http://10.0.2.2:5194/api
 ```
 
-### 3. Run the Desktop App
+### 3. Pokretanje desktop aplikacije
 
 ```bash
 cd frontend/jumpin_desktop
@@ -53,52 +53,55 @@ flutter pub get
 flutter run
 ```
 
-## Test Credentials
+## Testni nalozi
 
-### Desktop App (Admin)
+Prijavite se pomoću **e-maila** i lozinke ispod (sve seedovane lozinke su `test1234`).
 
-| Username | Password |
-|----------|----------|
-| desktop  | test     |
+### Desktop aplikacija (Admin)
 
-### Mobile App (Customer)
+| E-mail            | Lozinka  |
+|-------------------|----------|
+| admin@jumpin.com  | test1234 |
 
-| Username | Password |
-|----------|----------|
-| mobile   | test     |
+### Mobilna aplikacija (Kupac)
 
-### Additional Accounts
+| E-mail            | Lozinka  |
+|-------------------|----------|
+| mobile@jumpin.com | test1234 |
 
-| Username | Password | Role     |
-|----------|----------|----------|
-| admin    | test     | Admin    |
-| mirnes.muratspahic | test | Customer (VIP) |
-| sara.hadzic | test | Customer (VIP) |
-| amel.music | test | Customer |
-| denis.music | test | Customer |
-| kenan.begovic | test | Customer |
-| amina.causevic | test | Customer |
-| edin.spahic | test | Customer |
-| lejla.dizdar | test | Customer |
-| tarik.mesic | test | Customer |
-| nadia.imamovic | test | Customer |
+### Dodatni nalozi (lozinka `test1234`)
 
-## API Documentation
+| E-mail                    | Uloga       |
+|---------------------------|-------------|
+| admin@jumpin.com          | Admin       |
+| mobile@jumpin.com         | Kupac       |
+| alex.carter@gmail.com     | Kupac (VIP) |
+| jordan.bennett@gmail.com  | Kupac (VIP) |
+| sam.parker@gmail.com      | Kupac       |
+| jamie.brooks@gmail.com    | Kupac       |
+| chris.morgan@gmail.com    | Kupac       |
+| taylor.reed@gmail.com     | Kupac       |
+| casey.walker@gmail.com    | Kupac       |
+| riley.hayes@gmail.com     | Kupac       |
+| morgan.bailey@gmail.com   | Kupac       |
+| drew.foster@gmail.com     | Kupac       |
 
-Swagger UI is available at: `http://localhost:5194/swagger`
+## API dokumentacija
 
-## Architecture
+Swagger UI je dostupan na: `http://localhost:5194/swagger`
+
+## Arhitektura
 
 ```
 JumpIn/
 ├── backend/
 │   ├── JumpIn.API/          # REST API
-│   ├── JumpIn.Services/     # Business logic + EF Core
-│   ├── JumpIn.Models/       # DTOs, Enums, Search objects
-│   └── JumpIn.Worker/       # RabbitMQ consumer (email, notifications)
+│   ├── JumpIn.Services/     # Poslovna logika + EF Core
+│   ├── JumpIn.Models/       # DTO-ovi, enumi, search objekti
+│   └── JumpIn.Worker/       # RabbitMQ consumer (e-mail, notifikacije)
 ├── frontend/
-│   ├── jumpin_mobile/       # Flutter mobile app
-│   └── jumpin_desktop/      # Flutter desktop admin app
+│   ├── jumpin_mobile/       # Flutter mobilna aplikacija
+│   └── jumpin_desktop/      # Flutter desktop admin aplikacija
 ├── docker-compose.yml
 └── README.md
 ```
