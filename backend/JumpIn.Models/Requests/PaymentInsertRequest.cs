@@ -4,7 +4,7 @@ namespace JumpIn.Models.Requests
 {
     public class PaymentInsertRequest
     {
-        public int UserId { get; set; }
+        public Guid UserId { get; set; }
         public decimal Amount { get; set; }
         public string? Currency { get; set; }
         public PaymentType PaymentType { get; set; }

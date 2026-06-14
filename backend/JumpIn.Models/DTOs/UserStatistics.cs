@@ -31,5 +31,14 @@ namespace JumpIn.Models.DTOs
         public int TotalReviews { get; set; }
         public int TotalSupportMessages { get; set; }
         public int OpenSupportMessages { get; set; }
+
+        // Derived metrics for the dashboard charts
+        public int NewUsersThisMonth { get; set; }
+        public double AverageRating { get; set; }
+        public double SupportResponseRate { get; set; }
+        public double AdCompletionRate { get; set; }
+        public double RequestAcceptRate { get; set; }
+        public Dictionary<string, int> AdsByType { get; set; } = new();
+        public Dictionary<string, int> RequestsByStatus { get; set; } = new();
     }
 }

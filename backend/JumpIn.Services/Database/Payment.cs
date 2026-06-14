@@ -4,7 +4,7 @@ namespace JumpIn.Services.Database
 {
     public class Payment
     {
-        public int Id { get; set; }
+        public Guid Id { get; set; }
         public decimal Amount { get; set; }
         public string Currency { get; set; } = "BAM";
         public PaymentType PaymentType { get; set; }
@@ -15,7 +15,7 @@ namespace JumpIn.Services.Database
         public DateTime? CompletedAt { get; set; }
 
         // Foreign key
-        public int UserId { get; set; }
+        public Guid UserId { get; set; }
         public virtual User User { get; set; }
     }
 }

@@ -2,7 +2,7 @@ namespace JumpIn.Models.SearchObjects
 {
     public class PaymentSearchObject : BaseSearchObject
     {
-        public int? UserId { get; set; }
+        public Guid? UserId { get; set; }
         public string? Status { get; set; }
         public string? PaymentType { get; set; }
         public decimal? MinAmount { get; set; }
