@@ -431,3 +431,6 @@ backend/JumpIn.API/wwwroot/uploads/*
 **/macos/Flutter/ephemeral/
 **/macos/.symlinks/
 **/ios/Pods/
+
+# iOS Maps key (kept out of source control)
+**/ios/Flutter/Maps.xcconfig
