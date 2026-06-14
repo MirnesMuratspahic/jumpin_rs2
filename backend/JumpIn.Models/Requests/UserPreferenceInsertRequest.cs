@@ -4,7 +4,7 @@ namespace JumpIn.Models.Requests
 {
     public class UserPreferenceInsertRequest
     {
-        public int UserId { get; set; }
+        public Guid UserId { get; set; }
         public AdType? PreferredAdType { get; set; }
         public string? PreferredLocation { get; set; }
         public decimal? MinPrice { get; set; }

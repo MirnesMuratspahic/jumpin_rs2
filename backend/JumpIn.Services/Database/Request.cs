@@ -4,16 +4,18 @@ namespace JumpIn.Services.Database
 {
     public class Request : ISoftDeletable
     {
-        public int Id { get; set; }
+        public Guid Id { get; set; }
         public string RequestNumber { get; set; }
 
-        public int SenderId { get; set; }
+        public Guid SenderId { get; set; }
         public virtual User Sender { get; set; }
+        public string? SenderEmail { get; set; }
 
-        public int ReceiverId { get; set; }
+        public Guid ReceiverId { get; set; }
         public virtual User Receiver { get; set; }
+        public string? ReceiverEmail { get; set; }
 
-        public int AdId { get; set; }
+        public Guid AdId { get; set; }
         public virtual Ad Ad { get; set; }
 
         public RequestStatus Status { get; set; }

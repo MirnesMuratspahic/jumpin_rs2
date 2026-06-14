@@ -11,12 +11,14 @@ namespace JumpIn.Services.Database
         public DbSet<Request> Requests { get; set; }
         public DbSet<Review> Reviews { get; set; }
         public DbSet<SupportMessage> SupportMessages { get; set; }
+        public DbSet<SupportChat> SupportChats { get; set; }
         public DbSet<Payment> Payments { get; set; }
         public DbSet<Favorite> Favorites { get; set; }
         public DbSet<AdImage> AdImages { get; set; }
         public DbSet<UserPreference> UserPreferences { get; set; }
         public DbSet<ActivityLog> ActivityLogs { get; set; }
         public DbSet<City> Cities { get; set; }
+        public DbSet<Notification> Notifications { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -25,7 +27,6 @@ namespace JumpIn.Services.Database
             // User
             modelBuilder.Entity<User>(entity =>
             {
-                entity.HasIndex(u => u.Username).IsUnique();
                 entity.HasIndex(u => u.Email).IsUnique();
             });
 
@@ -62,6 +63,9 @@ namespace JumpIn.Services.Database
             // Review
             modelBuilder.Entity<Review>(entity =>
             {
+                entity.Property(r => r.ReviewerEmail).IsRequired(false).HasColumnType("nvarchar(max)");
+                entity.Property(r => r.ReviewedUserEmail).IsRequired(false).HasColumnType("nvarchar(max)");
+
                 entity.HasOne(r => r.Reviewer)
                     .WithMany(u => u.ReviewsGiven)
                     .HasForeignKey(r => r.ReviewerId)
@@ -85,6 +89,15 @@ namespace JumpIn.Services.Database
                 entity.HasOne(s => s.User)
                     .WithMany(u => u.SupportMessages)
                     .HasForeignKey(s => s.UserId)
+                    .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            // SupportChat
+            modelBuilder.Entity<SupportChat>(entity =>
+            {
+                entity.HasOne(sc => sc.SupportMessage)
+                    .WithMany(s => s.ChatMessages)
+                    .HasForeignKey(sc => sc.SupportMessageId)
                     .OnDelete(DeleteBehavior.Cascade);
             });
 
@@ -139,6 +152,17 @@ namespace JumpIn.Services.Database
                 entity.HasOne(al => al.User)
                     .WithMany(u => u.ActivityLogs)
                     .HasForeignKey(al => al.UserId)
+                    .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            // Notification
+            modelBuilder.Entity<Notification>(entity =>
+            {
+                entity.HasIndex(n => new { n.UserId, n.IsRead });
+
+                entity.HasOne(n => n.User)
+                    .WithMany(u => u.Notifications)
+                    .HasForeignKey(n => n.UserId)
                     .OnDelete(DeleteBehavior.Cascade);
             });
         }

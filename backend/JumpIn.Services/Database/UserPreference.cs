@@ -4,7 +4,7 @@ namespace JumpIn.Services.Database
 {
     public class UserPreference
     {
-        public int Id { get; set; }
+        public Guid Id { get; set; }
         public AdType? PreferredAdType { get; set; }
         public string? PreferredLocation { get; set; }
         public decimal? MinPrice { get; set; }
@@ -16,7 +16,7 @@ namespace JumpIn.Services.Database
         public DateTime UpdatedAt { get; set; }
 
         // Foreign key
-        public int UserId { get; set; }
+        public Guid UserId { get; set; }
         public virtual User User { get; set; }
     }
 }

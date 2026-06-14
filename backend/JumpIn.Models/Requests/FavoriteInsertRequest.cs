@@ -2,7 +2,7 @@ namespace JumpIn.Models.Requests
 {
     public class FavoriteInsertRequest
     {
-        public int UserId { get; set; }
-        public int AdId { get; set; }
+        public Guid UserId { get; set; }
+        public Guid AdId { get; set; }
     }
 }

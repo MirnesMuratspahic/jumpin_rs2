@@ -4,8 +4,8 @@ namespace JumpIn.Models.Requests
     {
         public int Rating { get; set; }
         public string? Comment { get; set; }
-        public int ReviewerId { get; set; }
-        public int ReviewedUserId { get; set; }
-        public int? AdId { get; set; }
+        public Guid ReviewerId { get; set; }
+        public Guid ReviewedUserId { get; set; }
+        public Guid? AdId { get; set; }
     }
 }

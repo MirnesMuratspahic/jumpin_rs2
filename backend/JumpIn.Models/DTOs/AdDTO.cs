@@ -40,9 +40,15 @@ namespace JumpIn.Models.DTOs
         public string Status { get; set; } = "Active";
         public DateTime CreatedAt { get; set; }
 
+        // Audit trail
+        public Guid? EndedByUserId { get; set; }
+        public DateTime? EndedAt { get; set; }
+        public Guid? DeletedByUserId { get; set; }
+
         // Owner info
         public Guid UserId { get; set; }
         public string? OwnerUsername { get; set; }
+        public string? OwnerFullName { get; set; }
         public string? UserProfileImage { get; set; }
         public decimal UserRating { get; set; }
         public bool IsVipOwner { get; set; }

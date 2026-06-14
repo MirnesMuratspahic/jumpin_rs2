@@ -34,6 +34,6 @@ namespace JumpIn.Models.Requests
         public string? ApartmentAddress { get; set; }
 
         public string? ImageUrl { get; set; }
-        public int UserId { get; set; }
+        public Guid UserId { get; set; }
     }
 }

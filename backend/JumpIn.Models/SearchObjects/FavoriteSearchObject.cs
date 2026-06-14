@@ -2,7 +2,7 @@ namespace JumpIn.Models.SearchObjects
 {
     public class FavoriteSearchObject : BaseSearchObject
     {
-        public int? UserId { get; set; }
-        public int? AdId { get; set; }
+        public Guid? UserId { get; set; }
+        public Guid? AdId { get; set; }
     }
 }

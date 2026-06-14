@@ -12,6 +12,6 @@ namespace JumpIn.Models.DTOs
         public int? PreferredApartmentRooms { get; set; }
         public bool NotificationsEnabled { get; set; }
         public DateTime UpdatedAt { get; set; }
-        public int UserId { get; set; }
+        public Guid UserId { get; set; }
     }
 }

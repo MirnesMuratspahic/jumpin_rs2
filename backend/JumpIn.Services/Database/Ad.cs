@@ -4,7 +4,7 @@ namespace JumpIn.Services.Database
 {
     public class Ad : ISoftDeletable
     {
-        public int Id { get; set; }
+        public Guid Id { get; set; }
         public string Title { get; set; }
         public string? Description { get; set; }
         public AdType AdType { get; set; }
@@ -36,15 +36,22 @@ namespace JumpIn.Services.Database
 
         public string? ImageUrl { get; set; }
         public bool IsActive { get; set; }
+        public AdStatus? Status { get; set; }
         public DateTime CreatedAt { get; set; }
 
         // Foreign key
-        public int UserId { get; set; }
+        public Guid UserId { get; set; }
         public virtual User User { get; set; }
+
+        // Audit trail for status changes: which user ended the ad, and when.
+        public Guid? EndedByUserId { get; set; }
+        public DateTime? EndedAt { get; set; }
 
         // Soft delete
         public bool IsDeleted { get; set; }
         public DateTime? DeleteTime { get; set; }
+        // Which user performed the delete (owner or admin).
+        public Guid? DeletedByUserId { get; set; }
 
         // Navigation
         public virtual ICollection<Request> Requests { get; set; } = new List<Request>();

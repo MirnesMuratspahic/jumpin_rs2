@@ -13,9 +13,8 @@ namespace JumpIn.Services.Mapping
             TypeAdapterConfig<User, UserModel>.NewConfig()
                 .Map(dest => dest.Status, src => src.Status.ToString().ToUpper())
                 .Map(dest => dest.Role, src => src.Role.ToString().ToUpper())
-                .Map(dest => dest.AverageRating, src => 0m)
-                .Map(dest => dest.TotalReviews, src => 0)
-                .Map(dest => dest.TotalAds, src => 0);
+                .Map(dest => dest.AverageRating, src => src.AverageRating)
+                .Map(dest => dest.TotalAds, src => src.TotalAds);
 
             TypeAdapterConfig<UserInsertRequest, User>.NewConfig()
                 .Ignore(dest => dest.PasswordHash)
@@ -29,7 +28,7 @@ namespace JumpIn.Services.Mapping
 
             // Ad mappings
             TypeAdapterConfig<Ad, AdDTO>.NewConfig()
-                .Map(dest => dest.AdType, src => src.AdType.ToString().ToUpper());
+                .Map(dest => dest.Type, src => src.AdType.ToString().ToUpper());
 
             TypeAdapterConfig<AdInsertRequest, Ad>.NewConfig();
             TypeAdapterConfig<AdUpdateRequest, Ad>.NewConfig()
@@ -92,6 +91,7 @@ namespace JumpIn.Services.Mapping
                 .Map(dest => dest.ActivityType, src => src.ActivityType.ToString().ToUpper());
 
             // City mappings
+            TypeAdapterConfig<City, CityDTO>.NewConfig();
             TypeAdapterConfig<CityInsertRequest, City>.NewConfig();
             TypeAdapterConfig<CityUpdateRequest, City>.NewConfig()
                 .IgnoreNullValues(true);

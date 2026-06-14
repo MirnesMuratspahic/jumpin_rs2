@@ -2,18 +2,21 @@ namespace JumpIn.Models.DTOs
 {
     public class RequestDTO
     {
-        public int Id { get; set; }
+        public Guid Id { get; set; }
         public string RequestNumber { get; set; }
 
-        public int SenderId { get; set; }
+        public Guid SenderId { get; set; }
         public string? SenderName { get; set; }
         public string? SenderEmail { get; set; }
+        public string? SenderPhone { get; set; }
         public string? SenderProfileImage { get; set; }
 
-        public int ReceiverId { get; set; }
+        public Guid ReceiverId { get; set; }
         public string? ReceiverName { get; set; }
+        public string? ReceiverEmail { get; set; }
+        public string? ReceiverPhone { get; set; }
 
-        public int AdId { get; set; }
+        public Guid AdId { get; set; }
         public string? AdTitle { get; set; }
         public string? AdType { get; set; }
 

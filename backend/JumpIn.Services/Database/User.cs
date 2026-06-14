@@ -9,6 +9,11 @@ namespace JumpIn.Services.Database
         public string LastName { get; set; }
         public string Email { get; set; }
         public string PasswordHash { get; set; }
+        // Regenerated on logout to invalidate previously-issued JWTs server-side.
+        public string? SecurityStamp { get; set; }
+        // Forgot-password: BCrypt hash of the emailed reset code + its expiry (never plaintext).
+        public string? ResetPasswordCodeHash { get; set; }
+        public DateTime? ResetPasswordExpiresAt { get; set; }
         public string? Phone { get; set; }
         public string? ProfileImageUrl { get; set; }
         public DateTime RegistrationDate { get; set; }
@@ -20,6 +25,8 @@ namespace JumpIn.Services.Database
         public bool IsVip { get; set; }
         public DateTime? VipActivatedAt { get; set; }
         public DateTime? VipExpiresAt { get; set; }
+        // True once the user cancels: VIP stays active until VipExpiresAt, then does not renew.
+        public bool VipCancelAtPeriodEnd { get; set; }
         public string? StripeCustomerId { get; set; }
         public string? StripeSubscriptionId { get; set; }
         public decimal AverageRating { get; set; } = 0;
@@ -40,5 +47,6 @@ namespace JumpIn.Services.Database
         public virtual ICollection<Favorite> Favorites { get; set; } = new List<Favorite>();
         public virtual ICollection<UserPreference> UserPreferences { get; set; } = new List<UserPreference>();
         public virtual ICollection<ActivityLog> ActivityLogs { get; set; } = new List<ActivityLog>();
+        public virtual ICollection<Notification> Notifications { get; set; } = new List<Notification>();
     }
 }

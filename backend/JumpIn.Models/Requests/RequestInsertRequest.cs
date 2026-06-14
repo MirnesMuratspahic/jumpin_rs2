@@ -2,8 +2,8 @@ namespace JumpIn.Models.Requests
 {
     public class RequestInsertRequest
     {
-        public int SenderId { get; set; }
-        public int AdId { get; set; }
+        public Guid SenderId { get; set; }
+        public Guid AdId { get; set; }
         public string? Message { get; set; }
     }
 }
