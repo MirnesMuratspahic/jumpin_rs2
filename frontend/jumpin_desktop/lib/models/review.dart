@@ -1,15 +1,13 @@
 class Review {
-  int? id;
+  String? id;
   int? rating;
   String? comment;
   DateTime? createdAt;
-  int? reviewerId;
-  String? reviewerUsername;
-  String? reviewerFullName;
-  int? reviewedUserId;
-  String? reviewedUserUsername;
-  String? reviewedUserFullName;
-  int? adId;
+  String? reviewerId;
+  String? reviewerEmail;
+  String? reviewedUserId;
+  String? reviewedUserEmail;
+  String? adId;
   String? adTitle;
 
   Review({
@@ -18,29 +16,50 @@ class Review {
     this.comment,
     this.createdAt,
     this.reviewerId,
-    this.reviewerUsername,
-    this.reviewerFullName,
+    this.reviewerEmail,
     this.reviewedUserId,
-    this.reviewedUserUsername,
-    this.reviewedUserFullName,
+    this.reviewedUserEmail,
     this.adId,
     this.adTitle,
   });
 
   Review.fromJson(Map<String, dynamic> json) {
-    id = json['id'];
-    rating = json['rating'];
-    comment = json['comment'];
-    createdAt =
-        json['createdAt'] != null ? DateTime.parse(json['createdAt']) : null;
-    reviewerId = json['reviewerId'];
-    reviewerUsername = json['reviewerUsername'];
-    reviewerFullName = json['reviewerFullName'];
-    reviewedUserId = json['reviewedUserId'];
-    reviewedUserUsername = json['reviewedUserUsername'];
-    reviewedUserFullName = json['reviewedUserFullName'];
-    adId = json['adId'];
-    adTitle = json['adTitle'];
+    id = _parseString(json['id']);
+    rating = _parseInt(json['rating']);
+    comment = _parseString(json['comment']);
+    createdAt = _parseDateTime(json['createdAt']);
+    reviewerId = _parseString(json['reviewerId']);
+    reviewerEmail = _parseString(json['reviewerEmail']);
+    reviewedUserId = _parseString(json['reviewedUserId']);
+    reviewedUserEmail = _parseString(json['reviewedUserEmail']);
+    adId = _parseString(json['adId']);
+    adTitle = _parseString(json['adTitle']);
+  }
+
+  static String? _parseString(dynamic value) {
+    if (value == null) return null;
+    return value.toString();
+  }
+
+  static int? _parseInt(dynamic value) {
+    if (value == null) return null;
+    if (value is int) return value;
+    if (value is double) return value.toInt();
+    if (value is String) return int.tryParse(value);
+    return null;
+  }
+
+  static DateTime? _parseDateTime(dynamic value) {
+    if (value == null) return null;
+    if (value is DateTime) return value;
+    if (value is String) {
+      try {
+        return DateTime.parse(value);
+      } catch (e) {
+        return null;
+      }
+    }
+    return null;
   }
 
   Map<String, dynamic> toJson() {
@@ -50,11 +69,9 @@ class Review {
     data['comment'] = comment;
     data['createdAt'] = createdAt?.toIso8601String();
     data['reviewerId'] = reviewerId;
-    data['reviewerUsername'] = reviewerUsername;
-    data['reviewerFullName'] = reviewerFullName;
+    data['reviewerEmail'] = reviewerEmail;
     data['reviewedUserId'] = reviewedUserId;
-    data['reviewedUserUsername'] = reviewedUserUsername;
-    data['reviewedUserFullName'] = reviewedUserFullName;
+    data['reviewedUserEmail'] = reviewedUserEmail;
     data['adId'] = adId;
     data['adTitle'] = adTitle;
     return data;

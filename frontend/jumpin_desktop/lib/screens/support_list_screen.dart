@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:jumpin_admin/layouts/master_screen.dart';
@@ -21,17 +22,31 @@ class _SupportListScreenState extends State<SupportListScreen> {
   String? _selectedStatus;
 
   int _currentPage = 1;
-  final int _pageSize = 15;
+  int _pageSize = 50;
+  final List<int> _pageSizeOptions = [50, 100, 200];
+
+  Timer? _pollTimer;
 
   @override
   void initState() {
     super.initState();
     _supportProvider = context.read<SupportProvider>();
     _loadMessages();
+    // Auto-refresh so new user messages (and the red dot) appear without manual refresh.
+    _pollTimer = Timer.periodic(
+      const Duration(seconds: 5),
+      (_) => _loadMessages(silent: true),
+    );
   }
 
-  Future<void> _loadMessages() async {
-    setState(() => _isLoading = true);
+  @override
+  void dispose() {
+    _pollTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _loadMessages({bool silent = false}) async {
+    if (!silent) setState(() => _isLoading = true);
 
     try {
       var filter = <String, dynamic>{
@@ -124,7 +139,6 @@ class _SupportListScreenState extends State<SupportListScreen> {
                 DropdownMenuItem(value: 'Open', child: Text('Open')),
                 DropdownMenuItem(value: 'InProgress', child: Text('In Progress')),
                 DropdownMenuItem(value: 'Resolved', child: Text('Resolved')),
-                DropdownMenuItem(value: 'Closed', child: Text('Closed')),
               ],
               onChanged: (value) {
                 setState(() => _selectedStatus = value);
@@ -149,6 +163,34 @@ class _SupportListScreenState extends State<SupportListScreen> {
             onPressed: _loadMessages,
             icon: const Icon(Icons.refresh, size: 18),
             label: const Text('Refresh'),
+          ),
+          const SizedBox(width: 20),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 15),
+            decoration: BoxDecoration(
+              border: Border.all(color: Colors.grey[300]!),
+              borderRadius: BorderRadius.circular(8),
+              color: Colors.grey[50],
+            ),
+            child: DropdownButton<int>(
+              value: _pageSize,
+              underline: const SizedBox(),
+              items: _pageSizeOptions.map((size) {
+                return DropdownMenuItem<int>(
+                  value: size,
+                  child: Text('$size per page', style: const TextStyle(fontSize: 14)),
+                );
+              }).toList(),
+              onChanged: (value) {
+                if (value != null) {
+                  setState(() {
+                    _pageSize = value;
+                    _currentPage = 1;
+                    _loadMessages();
+                  });
+                }
+              },
+            ),
           ),
         ],
       ),
@@ -179,132 +221,98 @@ class _SupportListScreenState extends State<SupportListScreen> {
       );
     }
 
-    return Container(
-      margin: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.withOpacity(0.1),
-            spreadRadius: 1,
-            blurRadius: 4,
-            offset: const Offset(0, 2),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final minTableWidth = constraints.maxWidth * 0.8;
+        return Container(
+          margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(8),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.grey.withOpacity(0.1),
+                spreadRadius: 1,
+                blurRadius: 4,
+                offset: const Offset(0, 2),
+              ),
+            ],
           ),
-        ],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(8),
-        child: SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: SingleChildScrollView(
-            child: DataTable(
-              headingRowColor: WidgetStateProperty.all(const Color(0xFF0D47A1).withOpacity(0.05)),
-              columnSpacing: 24,
-              columns: const [
-                DataColumn(label: Text('User', style: TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF0D47A1)))),
-                DataColumn(label: Text('Email', style: TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF0D47A1)))),
-                DataColumn(label: Text('Subject', style: TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF0D47A1)))),
-                DataColumn(label: Text('Category', style: TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF0D47A1)))),
-                DataColumn(label: Text('Priority', style: TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF0D47A1)))),
-                DataColumn(label: Text('Status', style: TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF0D47A1)))),
-                DataColumn(label: Text('Date', style: TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF0D47A1)))),
-                DataColumn(label: Text('Actions', style: TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF0D47A1)))),
-              ],
-              rows: messages.map((msg) => _buildSupportRow(msg)).toList(),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: SingleChildScrollView(
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minWidth: minTableWidth),
+                  child: DataTable(
+                    headingRowColor: WidgetStateProperty.all(const Color(0xFF0D47A1).withOpacity(0.05)),
+                    columnSpacing: 32,
+                    horizontalMargin: 24,
+                    columns: const [
+                      DataColumn(label: Text('User', style: TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF0D47A1)))),
+                      DataColumn(label: Text('Email', style: TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF0D47A1)))),
+                      DataColumn(label: Text('Last Message', style: TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF0D47A1)))),
+                      DataColumn(label: Text('Actions', style: TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF0D47A1)))),
+                    ],
+                    rows: messages.map((msg) => _buildSupportRow(msg)).toList(),
+                  ),
+                ),
+              ),
             ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
-  DataRow _buildSupportRow(SupportMessage msg) {
-    Color statusColor;
-    switch (msg.status) {
-      case 'Open':
-        statusColor = Colors.blue;
-        break;
-      case 'InProgress':
-        statusColor = Colors.orange;
-        break;
-      case 'Resolved':
-        statusColor = Colors.green;
-        break;
-      case 'Closed':
-        statusColor = Colors.grey;
-        break;
-      default:
-        statusColor = Colors.blue;
+  DateTime? _lastMessageDate(SupportMessage msg) {
+    DateTime? last;
+    if (msg.chatMessages != null) {
+      for (final chat in msg.chatMessages!) {
+        if (chat.createdAt != null &&
+            (last == null || chat.createdAt!.isAfter(last))) {
+          last = chat.createdAt;
+        }
+      }
     }
+    return last ?? msg.respondedAt ?? msg.createdAt;
+  }
 
-    Color priorityColor;
-    switch (msg.priority) {
-      case 'High':
-        priorityColor = Colors.red;
-        break;
-      case 'Medium':
-        priorityColor = Colors.orange;
-        break;
-      case 'Low':
-        priorityColor = Colors.green;
-        break;
-      default:
-        priorityColor = Colors.grey;
+  bool _hasNewUserMessage(SupportMessage msg) {
+    final chats = msg.chatMessages;
+    if (chats != null && chats.isNotEmpty) {
+      return chats.last.isAdminMessage == false;
     }
+    return msg.adminResponse == null;
+  }
+
+  DataRow _buildSupportRow(SupportMessage msg) {
+    final hasNew = _hasNewUserMessage(msg);
 
     return DataRow(
       cells: [
-        DataCell(Text(msg.userUsername ?? '-', style: const TextStyle(fontWeight: FontWeight.w500))),
+        DataCell(
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (hasNew) ...[
+                Container(
+                  width: 8,
+                  height: 8,
+                  decoration: const BoxDecoration(
+                    color: Colors.red,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                const SizedBox(width: 8),
+              ],
+              Text(msg.userUsername ?? '-', style: const TextStyle(fontWeight: FontWeight.w500)),
+            ],
+          ),
+        ),
         DataCell(Text(msg.userEmail ?? '-')),
-        DataCell(
-          SizedBox(
-            width: 200,
-            child: Text(
-              msg.subject ?? '-',
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontWeight: FontWeight.w500),
-            ),
-          ),
-        ),
-        DataCell(Text(msg.category ?? '-')),
-        DataCell(
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(
-              color: priorityColor.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: priorityColor, width: 1),
-            ),
-            child: Text(
-              msg.priority ?? '-',
-              style: TextStyle(
-                color: _darkenColor(priorityColor),
-                fontWeight: FontWeight.w600,
-                fontSize: 12,
-              ),
-            ),
-          ),
-        ),
-        DataCell(
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-            decoration: BoxDecoration(
-              color: statusColor.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: statusColor, width: 1),
-            ),
-            child: Text(
-              msg.status ?? '-',
-              style: TextStyle(
-                color: _darkenColor(statusColor),
-                fontWeight: FontWeight.w600,
-                fontSize: 12,
-              ),
-            ),
-          ),
-        ),
-        DataCell(Text(formatDate(msg.createdAt))),
+        DataCell(Text(formatDateTime(_lastMessageDate(msg)))),
         DataCell(
           Row(
             mainAxisSize: MainAxisSize.min,
@@ -363,146 +371,233 @@ class _SupportListScreenState extends State<SupportListScreen> {
     );
   }
 
-  Color _darkenColor(Color color) {
-    final hsl = HSLColor.fromColor(color);
-    return hsl.withLightness((hsl.lightness - 0.1).clamp(0.0, 1.0)).toColor();
-  }
 
   void _showMessageDialog(SupportMessage msg) {
-    final TextEditingController responseController = TextEditingController(
-      text: msg.adminResponse ?? '',
-    );
+    final TextEditingController responseController = TextEditingController();
     final formKey = GlobalKey<FormState>();
+    final scrollController = ScrollController();
+    Timer? dialogTimer;
+    void Function(void Function())? refreshDialog;
+
+    // Live-refresh the open chat so new user messages appear without reopening.
+    Future<void> pollDialog() async {
+      if (msg.id == null) return;
+      try {
+        final updated = await _supportProvider.getById(msg.id!);
+        final newChats = updated.chatMessages ?? [];
+        // Only update when there is new content; never wipe a populated thread.
+        final changed = newChats.length > (msg.chatMessages?.length ?? 0);
+        if (changed && refreshDialog != null) {
+          refreshDialog!(() {
+            msg.chatMessages = List<ChatMessage>.from(newChats);
+            msg.adminResponse = updated.adminResponse;
+          });
+          await Future.delayed(const Duration(milliseconds: 200));
+          if (scrollController.hasClients) {
+            scrollController.jumpTo(scrollController.position.maxScrollExtent);
+          }
+        }
+      } catch (_) {}
+    }
 
     showDialog(
       context: context,
       builder: (context) {
-        return AlertDialog(
-          title: Row(
-            children: [
-              const Icon(Icons.support_agent, color: Color(0xFF0D47A1)),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  msg.subject ?? 'Support Ticket',
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
-          ),
-          content: SizedBox(
-            width: 600,
-            child: SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
+        return StatefulBuilder(
+          builder: (context, setState) {
+            refreshDialog = setState;
+            dialogTimer ??= Timer.periodic(
+              const Duration(seconds: 4),
+              (_) => pollDialog(),
+            );
+            return AlertDialog(
+              title: Row(
                 children: [
-                  _detailRow('From', msg.userUsername),
-                  _detailRow('Email', msg.userEmail),
-                  _detailRow('Category', msg.category),
-                  _detailRow('Priority', msg.priority),
-                  _detailRow('Status', msg.status),
-                  _detailRow('Date', formatDateTime(msg.createdAt)),
-                  if (msg.respondedAt != null)
-                    _detailRow('Responded', formatDateTime(msg.respondedAt)),
-                  if (msg.respondedByAdminUsername != null)
-                    _detailRow('Responded By', msg.respondedByAdminUsername),
-                  const SizedBox(height: 16),
-                  const Text('User Message:', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF0D47A1))),
-                  const SizedBox(height: 8),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: Colors.grey[50],
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.grey[300]!),
-                    ),
-                    child: Text(msg.message ?? 'No message content.'),
-                  ),
-                  const SizedBox(height: 20),
-                  const Text('Admin Response:', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF0D47A1))),
-                  const SizedBox(height: 8),
-                  Form(
-                    key: formKey,
-                    child: TextFormField(
-                      controller: responseController,
-                      decoration: InputDecoration(
-                        hintText: 'Type your response here...',
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
+                  const Icon(Icons.support_agent, color: Color(0xFF0D47A1)),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          msg.subject ?? 'Support Ticket',
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                         ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                          borderSide: const BorderSide(color: Color(0xFF0D47A1), width: 2),
+                        Text(
+                          '${msg.userUsername} (${msg.userEmail})',
+                          style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                         ),
-                      ),
-                      maxLines: 5,
-                      validator: (value) {
-                        if (value == null || value.trim().isEmpty) {
-                          return 'Response is required';
-                        }
-                        return null;
-                      },
+                      ],
                     ),
                   ),
                 ],
               ),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton.icon(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF0D47A1),
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              content: SizedBox(
+                width: 700,
+                height: 500,
+                child: Column(
+                  children: [
+                    Expanded(
+                      child: SingleChildScrollView(
+                        controller: scrollController,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: msg.chatMessages?.isNotEmpty == true
+                              ? msg.chatMessages!
+                                  .map((chat) => _buildChatBubble(
+                                    message: chat.message ?? '',
+                                    isAdmin: chat.isAdminMessage,
+                                    timestamp: chat.createdAt,
+                                  ))
+                                  .toList()
+                              : [
+                                  _buildChatBubble(
+                                    message: msg.message ?? '',
+                                    isAdmin: false,
+                                    timestamp: msg.createdAt,
+                                  ),
+                                ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Form(
+                      key: formKey,
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: TextFormField(
+                              controller: responseController,
+                              decoration: InputDecoration(
+                                hintText: 'Type your response...',
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                  borderSide: const BorderSide(color: Color(0xFF0D47A1), width: 2),
+                                ),
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                              ),
+                              maxLines: 3,
+                              minLines: 1,
+                              validator: (value) {
+                                if (value == null || value.trim().isEmpty) {
+                                  return 'Response is required';
+                                }
+                                return null;
+                              },
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          ElevatedButton.icon(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF0D47A1),
+                              foregroundColor: Colors.white,
+                            ),
+                            onPressed: () async {
+                              if (formKey.currentState!.validate()) {
+                                final response = responseController.text;
+                                responseController.clear();
+                                final updatedMsg = await _respondToMessage(msg.id!, response);
+                                if (updatedMsg != null && mounted) {
+                                  setState(() {
+                                    msg.chatMessages = List<ChatMessage>.from(updatedMsg.chatMessages ?? []);
+                                    msg.adminResponse = updatedMsg.adminResponse;
+                                  });
+                                  await Future.delayed(const Duration(milliseconds: 300));
+                                  if (mounted && scrollController.hasClients) {
+                                    scrollController.jumpTo(scrollController.position.maxScrollExtent);
+                                  }
+                                }
+                              }
+                            },
+                            icon: const Icon(Icons.send, size: 18),
+                            label: const Text('Send'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
-              onPressed: () async {
-                if (formKey.currentState!.validate()) {
-                  Navigator.of(context).pop();
-                  await _respondToMessage(msg.id!, responseController.text);
-                }
-              },
-              icon: const Icon(Icons.send, size: 18),
-              label: const Text('Send Response'),
-            ),
-          ],
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Close'),
+                ),
+              ],
+            );
+          },
         );
       },
-    );
+    ).then((_) => dialogTimer?.cancel());
   }
 
-  Widget _detailRow(String label, String? value) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 120,
-            child: Text('$label:', style: const TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF616161))),
+  Widget _buildChatBubble({
+    required String message,
+    required bool isAdmin,
+    required DateTime? timestamp,
+  }) {
+    return Align(
+      alignment: isAdmin ? Alignment.centerRight : Alignment.centerLeft,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(12),
+        constraints: const BoxConstraints(maxWidth: 500),
+        decoration: BoxDecoration(
+          color: isAdmin ? const Color(0xFF0D47A1).withOpacity(0.1) : Colors.grey[100],
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: isAdmin ? const Color(0xFF0D47A1) : Colors.grey[300]!,
+            width: 1,
           ),
-          Expanded(child: Text(value ?? '-')),
-        ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              isAdmin ? 'Admin Response' : 'User Message',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: isAdmin ? const Color(0xFF0D47A1) : Colors.grey[600],
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              message,
+              style: const TextStyle(fontSize: 13, height: 1.5),
+            ),
+            if (timestamp != null) ...[
+              const SizedBox(height: 6),
+              Text(
+                formatDateTime(timestamp),
+                style: TextStyle(fontSize: 10, color: Colors.grey[500]),
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }
 
-  Future<void> _respondToMessage(int id, String response) async {
+  Future<SupportMessage?> _respondToMessage(String id, String response) async {
     try {
-      await _supportProvider.respondToMessage(id, response);
-      if (context.mounted) {
-        await buildSuccessAlert(context, 'Success', 'Response sent successfully.');
+      final updatedMsg = await _supportProvider.respondToMessage(id, response);
+      if (mounted) {
+        await _loadMessages();
       }
-      _loadMessages();
+      return updatedMsg;
     } catch (e) {
-      if (context.mounted) {
-        await buildErrorAlert(context, 'Error', e.toString(), e as Exception);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e')),
+        );
       }
+      return null;
     }
   }
 }

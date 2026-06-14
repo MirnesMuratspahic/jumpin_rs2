@@ -1,6 +1,6 @@
 class SupportMessage {
-  int? id;
-  int? userId;
+  String? id;
+  String? userId;
   String? userUsername;
   String? userFullName;
   String? userEmail;
@@ -12,8 +12,9 @@ class SupportMessage {
   DateTime? createdAt;
   DateTime? respondedAt;
   String? adminResponse;
-  int? respondedByAdminId;
+  String? respondedByAdminId;
   String? respondedByAdminUsername;
+  List<ChatMessage>? chatMessages;
 
   SupportMessage({
     this.id,
@@ -31,27 +32,48 @@ class SupportMessage {
     this.adminResponse,
     this.respondedByAdminId,
     this.respondedByAdminUsername,
+    this.chatMessages,
   });
 
   SupportMessage.fromJson(Map<String, dynamic> json) {
-    id = json['id'];
-    userId = json['userId'];
-    userUsername = json['userUsername'];
-    userFullName = json['userFullName'];
-    userEmail = json['userEmail'];
-    subject = json['subject'];
-    message = json['message'];
-    status = json['status'];
-    priority = json['priority'];
-    category = json['category'];
-    createdAt =
-        json['createdAt'] != null ? DateTime.parse(json['createdAt']) : null;
-    respondedAt = json['respondedAt'] != null
-        ? DateTime.parse(json['respondedAt'])
-        : null;
-    adminResponse = json['adminResponse'];
-    respondedByAdminId = json['respondedByAdminId'];
-    respondedByAdminUsername = json['respondedByAdminUsername'];
+    id = _parseString(json['id']);
+    userId = _parseString(json['userId']);
+    userUsername = _parseString(json['userUsername']);
+    userFullName = _parseString(json['userFullName']);
+    userEmail = _parseString(json['userEmail']);
+    subject = _parseString(json['subject']);
+    message = _parseString(json['message']);
+    status = _parseString(json['status']);
+    priority = _parseString(json['priority']);
+    category = _parseString(json['category']);
+    createdAt = _parseDateTime(json['createdAt']);
+    respondedAt = _parseDateTime(json['respondedAt']);
+    adminResponse = _parseString(json['adminResponse']);
+    respondedByAdminId = _parseString(json['respondedByAdminId']);
+    respondedByAdminUsername = _parseString(json['respondedByAdminUsername']);
+    if (json['chatMessages'] is List) {
+      chatMessages = (json['chatMessages'] as List)
+          .map((msg) => ChatMessage.fromJson(msg as Map<String, dynamic>))
+          .toList();
+    }
+  }
+
+  static String? _parseString(dynamic value) {
+    if (value == null) return null;
+    return value.toString();
+  }
+
+  static DateTime? _parseDateTime(dynamic value) {
+    if (value == null) return null;
+    if (value is DateTime) return value;
+    if (value is String) {
+      try {
+        return DateTime.parse(value);
+      } catch (e) {
+        return null;
+      }
+    }
+    return null;
   }
 
   Map<String, dynamic> toJson() {
@@ -71,6 +93,51 @@ class SupportMessage {
     data['adminResponse'] = adminResponse;
     data['respondedByAdminId'] = respondedByAdminId;
     data['respondedByAdminUsername'] = respondedByAdminUsername;
+    if (chatMessages != null) {
+      data['chatMessages'] = chatMessages!.map((msg) => msg.toJson()).toList();
+    }
     return data;
+  }
+}
+
+class ChatMessage {
+  String? id;
+  String? message;
+  bool isAdminMessage;
+  DateTime? createdAt;
+
+  ChatMessage({
+    this.id,
+    this.message,
+    this.isAdminMessage = false,
+    this.createdAt,
+  });
+
+  ChatMessage.fromJson(Map<String, dynamic> json)
+      : id = json['id']?.toString(),
+        message = json['message']?.toString(),
+        isAdminMessage = json['isAdminMessage'] ?? false,
+        createdAt = _parseDateTime(json['createdAt']);
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'message': message,
+      'isAdminMessage': isAdminMessage,
+      'createdAt': createdAt?.toIso8601String(),
+    };
+  }
+
+  static DateTime? _parseDateTime(dynamic value) {
+    if (value == null) return null;
+    if (value is DateTime) return value;
+    if (value is String) {
+      try {
+        return DateTime.parse(value);
+      } catch (e) {
+        return null;
+      }
+    }
+    return null;
   }
 }

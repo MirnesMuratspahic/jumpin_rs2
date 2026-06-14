@@ -14,8 +14,8 @@ class SupportProvider extends BaseProvider<SupportMessage> {
     return SupportMessage.fromJson(data);
   }
 
-  Future<SupportMessage> respondToMessage(int id, String response) async {
-    var url = "$baseUrl/Support/$id/respond";
+  Future<SupportMessage> respondToMessage(String id, String response) async {
+    var url = "$baseUrl/support/$id/respond";
     var uri = Uri.parse(url);
     var headers = createHeaders();
 

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:jumpin_admin/layouts/master_screen.dart';
 import 'package:jumpin_admin/providers/statistics_provider.dart';
+import 'package:jumpin_admin/services/report_service.dart';
 
 class StatisticsScreen extends StatefulWidget {
   const StatisticsScreen({super.key});
@@ -55,6 +56,32 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
     }
   }
 
+  Future<void> _exportPdf() async {
+    try {
+      // The provider returns the full statistics object on each call, so any
+      // of the maps holds every key; merge to be safe.
+      final merged = <String, dynamic>{
+        ..._overviewData,
+        ..._adStats,
+        ..._requestStats,
+        ..._userStats,
+      };
+      final bytes = await ReportService.buildStatisticsReport(merged);
+      final path = await ReportService.exportPdf(bytes, 'jumpin-statistics-report');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Report saved to $path')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not generate report: $e')),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return MasterScreen(
@@ -70,6 +97,19 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: ElevatedButton.icon(
+                        onPressed: _exportPdf,
+                        icon: const Icon(Icons.picture_as_pdf),
+                        label: const Text('Export PDF'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF0D47A1),
+                          foregroundColor: Colors.white,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
                     _buildSummaryCards(),
                     const SizedBox(height: 30),
                     Row(
@@ -193,55 +233,44 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
   Widget _buildAdTypePieChart() {
     final adByType = _adStats['adsByType'] as Map<String, dynamic>? ?? {};
 
-    final offers = (adByType['Offer'] ?? adByType['offer'] ?? 0).toDouble();
-    final requests = (adByType['Request'] ?? adByType['request'] ?? 0).toDouble();
-    final services = (adByType['Service'] ?? adByType['service'] ?? 0).toDouble();
-    final events = (adByType['Event'] ?? adByType['event'] ?? 0).toDouble();
+    final routes = (adByType['Route'] ?? adByType['route'] ?? 0).toDouble();
+    final cars = (adByType['Car'] ?? adByType['car'] ?? 0).toDouble();
+    final apartments = (adByType['Apartment'] ?? adByType['apartment'] ?? 0).toDouble();
 
-    final total = offers + requests + services + events;
+    final total = routes + cars + apartments;
 
     final List<PieChartSectionData> sections = [];
     final List<_LegendItem> legendItems = [];
 
-    if (offers > 0) {
+    if (routes > 0) {
       sections.add(PieChartSectionData(
-        value: offers,
-        title: '${(offers / total * 100).toStringAsFixed(0)}%',
+        value: routes,
+        title: '${(routes / total * 100).toStringAsFixed(0)}%',
         color: const Color(0xFF1565C0),
         radius: 80,
         titleStyle: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
       ));
-      legendItems.add(_LegendItem('Offers', const Color(0xFF1565C0), offers.toInt()));
+      legendItems.add(_LegendItem('Routes', const Color(0xFF1565C0), routes.toInt()));
     }
-    if (requests > 0) {
+    if (cars > 0) {
       sections.add(PieChartSectionData(
-        value: requests,
-        title: '${(requests / total * 100).toStringAsFixed(0)}%',
+        value: cars,
+        title: '${(cars / total * 100).toStringAsFixed(0)}%',
         color: const Color(0xFF2E7D32),
         radius: 80,
         titleStyle: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
       ));
-      legendItems.add(_LegendItem('Requests', const Color(0xFF2E7D32), requests.toInt()));
+      legendItems.add(_LegendItem('Cars', const Color(0xFF2E7D32), cars.toInt()));
     }
-    if (services > 0) {
+    if (apartments > 0) {
       sections.add(PieChartSectionData(
-        value: services,
-        title: '${(services / total * 100).toStringAsFixed(0)}%',
+        value: apartments,
+        title: '${(apartments / total * 100).toStringAsFixed(0)}%',
         color: const Color(0xFFE65100),
         radius: 80,
         titleStyle: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
       ));
-      legendItems.add(_LegendItem('Services', const Color(0xFFE65100), services.toInt()));
-    }
-    if (events > 0) {
-      sections.add(PieChartSectionData(
-        value: events,
-        title: '${(events / total * 100).toStringAsFixed(0)}%',
-        color: const Color(0xFF6A1B9A),
-        radius: 80,
-        titleStyle: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
-      ));
-      legendItems.add(_LegendItem('Events', const Color(0xFF6A1B9A), events.toInt()));
+      legendItems.add(_LegendItem('Apartments', const Color(0xFFE65100), apartments.toInt()));
     }
 
     if (sections.isEmpty) {

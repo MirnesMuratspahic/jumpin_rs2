@@ -5,6 +5,7 @@ import 'package:jumpin_admin/models/review.dart';
 import 'package:jumpin_admin/models/search_result.dart';
 import 'package:jumpin_admin/providers/review_provider.dart';
 import 'package:jumpin_admin/providers/helper_providers/utils.dart';
+import 'package:jumpin_admin/widgets/detail_dialog.dart';
 
 class ReviewListScreen extends StatefulWidget {
   const ReviewListScreen({super.key});
@@ -19,7 +20,8 @@ class _ReviewListScreenState extends State<ReviewListScreen> {
   bool _isLoading = true;
 
   int _currentPage = 1;
-  final int _pageSize = 15;
+  int _pageSize = 50;
+  final List<int> _pageSizeOptions = [50, 100, 200];
 
   @override
   void initState() {
@@ -113,6 +115,34 @@ class _ReviewListScreenState extends State<ReviewListScreen> {
             icon: const Icon(Icons.refresh, size: 18),
             label: const Text('Refresh'),
           ),
+          const SizedBox(width: 20),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 15),
+            decoration: BoxDecoration(
+              border: Border.all(color: Colors.grey[300]!),
+              borderRadius: BorderRadius.circular(8),
+              color: Colors.grey[50],
+            ),
+            child: DropdownButton<int>(
+              value: _pageSize,
+              underline: const SizedBox(),
+              items: _pageSizeOptions.map((size) {
+                return DropdownMenuItem<int>(
+                  value: size,
+                  child: Text('$size per page', style: const TextStyle(fontSize: 14)),
+                );
+              }).toList(),
+              onChanged: (value) {
+                if (value != null) {
+                  setState(() {
+                    _pageSize = value;
+                    _currentPage = 1;
+                    _loadReviews();
+                  });
+                }
+              },
+            ),
+          ),
         ],
       ),
     );
@@ -143,7 +173,7 @@ class _ReviewListScreenState extends State<ReviewListScreen> {
     }
 
     return Container(
-      margin: const EdgeInsets.all(20),
+      margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 16),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(8),
@@ -163,15 +193,15 @@ class _ReviewListScreenState extends State<ReviewListScreen> {
           child: SingleChildScrollView(
             child: DataTable(
               headingRowColor: WidgetStateProperty.all(const Color(0xFF0D47A1).withOpacity(0.05)),
-              columnSpacing: 24,
+              columnSpacing: 32,
+              horizontalMargin: 24,
               columns: const [
-                DataColumn(label: Text('Reviewer', style: TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF0D47A1)))),
-                DataColumn(label: Text('Reviewed User', style: TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF0D47A1)))),
-                DataColumn(label: Text('Rating', style: TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF0D47A1)))),
-                DataColumn(label: Text('Comment', style: TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF0D47A1)))),
-                DataColumn(label: Text('Ad', style: TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF0D47A1)))),
-                DataColumn(label: Text('Date', style: TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF0D47A1)))),
-                DataColumn(label: Text('Actions', style: TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF0D47A1)))),
+                DataColumn(label: Text('Reviewer Email', style: TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF0D47A1), fontSize: 13))),
+                DataColumn(label: Text('Reviewed User Email', style: TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF0D47A1), fontSize: 13))),
+                DataColumn(label: Text('Rating', style: TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF0D47A1), fontSize: 13))),
+                DataColumn(label: Text('Comment', style: TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF0D47A1), fontSize: 13))),
+                DataColumn(label: Text('Date', style: TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF0D47A1), fontSize: 13))),
+                DataColumn(label: Text('Actions', style: TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF0D47A1), fontSize: 13))),
               ],
               rows: reviews.map((review) => _buildReviewRow(review)).toList(),
             ),
@@ -184,8 +214,8 @@ class _ReviewListScreenState extends State<ReviewListScreen> {
   DataRow _buildReviewRow(Review review) {
     return DataRow(
       cells: [
-        DataCell(Text(review.reviewerUsername ?? '-', style: const TextStyle(fontWeight: FontWeight.w500))),
-        DataCell(Text(review.reviewedUserUsername ?? '-')),
+        DataCell(Text(review.reviewerEmail ?? '-', style: const TextStyle(fontWeight: FontWeight.w500))),
+        DataCell(Text(review.reviewedUserEmail ?? '-')),
         DataCell(
           Row(
             mainAxisSize: MainAxisSize.min,
@@ -194,20 +224,11 @@ class _ReviewListScreenState extends State<ReviewListScreen> {
         ),
         DataCell(
           SizedBox(
-            width: 250,
+            width: 280,
             child: Text(
               review.comment ?? '-',
               overflow: TextOverflow.ellipsis,
               maxLines: 2,
-            ),
-          ),
-        ),
-        DataCell(
-          SizedBox(
-            width: 120,
-            child: Text(
-              review.adTitle ?? '-',
-              overflow: TextOverflow.ellipsis,
             ),
           ),
         ),
@@ -293,48 +314,35 @@ class _ReviewListScreenState extends State<ReviewListScreen> {
     showDialog(
       context: context,
       builder: (context) {
-        return AlertDialog(
-          title: const Text('Review Details'),
-          content: SizedBox(
-            width: 500,
-            child: SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _detailRow('Reviewer', review.reviewerUsername),
-                  _detailRow('Reviewer Name', review.reviewerFullName),
-                  _detailRow('Reviewed User', review.reviewedUserUsername),
-                  _detailRow('Reviewed User Name', review.reviewedUserFullName),
-                  _detailRow('Ad', review.adTitle),
-                  _detailRow('Date', formatDateTime(review.createdAt)),
-                  const SizedBox(height: 8),
-                  const Text('Rating:', style: TextStyle(fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 4),
-                  Row(children: _buildStarRating(review.rating ?? 0)),
-                  const SizedBox(height: 12),
-                  const Text('Comment:', style: TextStyle(fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 4),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.grey[50],
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.grey[200]!),
-                    ),
-                    child: Text(review.comment ?? 'No comment provided.'),
-                  ),
-                ],
-              ),
+        return DetailDialog(
+          icon: Icons.rate_review,
+          title: 'Review Details',
+          subtitle: review.adTitle,
+          children: [
+            DetailRow(icon: Icons.person, label: 'Reviewer', value: review.reviewerEmail),
+            const DetailDivider(),
+            DetailRow(icon: Icons.person_outline, label: 'Reviewed User', value: review.reviewedUserEmail),
+            const DetailDivider(),
+            DetailRow(icon: Icons.article, label: 'Ad', value: review.adTitle),
+            const DetailDivider(),
+            DetailRow(icon: Icons.calendar_today, label: 'Date', value: formatDateTime(review.createdAt)),
+            const DetailDivider(),
+            DetailRow(
+              icon: Icons.star,
+              label: 'Rating',
+              valueWidget: Row(children: _buildStarRating(review.rating ?? 0)),
             ),
-          ),
+            DetailSection(
+              label: 'Comment',
+              content: review.comment ?? 'No comment provided.',
+            ),
+          ],
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
               child: const Text('Close'),
             ),
-            ElevatedButton(
+            ElevatedButton.icon(
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.red,
                 foregroundColor: Colors.white,
@@ -343,27 +351,12 @@ class _ReviewListScreenState extends State<ReviewListScreen> {
                 Navigator.of(context).pop();
                 _deleteReview(review);
               },
-              child: const Text('Delete Review'),
+              icon: const Icon(Icons.delete, size: 18),
+              label: const Text('Delete'),
             ),
           ],
         );
       },
-    );
-  }
-
-  Widget _detailRow(String label, String? value) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 150,
-            child: Text('$label:', style: const TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF0D47A1))),
-          ),
-          Expanded(child: Text(value ?? '-')),
-        ],
-      ),
     );
   }
 
@@ -374,7 +367,7 @@ class _ReviewListScreenState extends State<ReviewListScreen> {
         return AlertDialog(
           title: const Text('Delete Review'),
           content: Text(
-            'Are you sure you want to delete this review by "${review.reviewerUsername}"? This action cannot be undone.',
+            'Are you sure you want to delete this review by "${review.reviewerEmail}"? This action cannot be undone.',
           ),
           actions: [
             TextButton(

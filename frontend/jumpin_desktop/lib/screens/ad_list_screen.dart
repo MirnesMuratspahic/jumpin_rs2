@@ -5,6 +5,8 @@ import 'package:jumpin_admin/models/ad.dart';
 import 'package:jumpin_admin/models/search_result.dart';
 import 'package:jumpin_admin/providers/ad_provider.dart';
 import 'package:jumpin_admin/providers/helper_providers/utils.dart';
+import 'package:jumpin_admin/widgets/detail_dialog.dart';
+import 'package:jumpin_admin/services/report_service.dart';
 
 class AdListScreen extends StatefulWidget {
   const AdListScreen({super.key});
@@ -22,7 +24,8 @@ class _AdListScreenState extends State<AdListScreen> {
   String? _selectedType;
 
   int _currentPage = 1;
-  final int _pageSize = 15;
+  int _pageSize = 50;
+  final List<int> _pageSizeOptions = [50, 100, 200];
 
   @override
   void initState() {
@@ -44,7 +47,7 @@ class _AdListScreenState extends State<AdListScreen> {
         filter['SearchTerm'] = _searchController.text;
       }
       if (_selectedType != null) {
-        filter['Type'] = _selectedType;
+        filter['AdType'] = _selectedType;
       }
 
       var result = await _adProvider.get(filter: filter);
@@ -141,10 +144,9 @@ class _AdListScreenState extends State<AdListScreen> {
               value: _selectedType,
               items: const [
                 DropdownMenuItem(value: null, child: Text('All Types')),
-                DropdownMenuItem(value: 'Offer', child: Text('Offer')),
-                DropdownMenuItem(value: 'Request', child: Text('Request')),
-                DropdownMenuItem(value: 'Service', child: Text('Service')),
-                DropdownMenuItem(value: 'Event', child: Text('Event')),
+                DropdownMenuItem(value: 'CAR', child: Text('Car')),
+                DropdownMenuItem(value: 'ROUTE', child: Text('Route')),
+                DropdownMenuItem(value: 'APARTMENT', child: Text('Apartment')),
               ],
               onChanged: (value) {
                 setState(() => _selectedType = value);
@@ -178,6 +180,47 @@ class _AdListScreenState extends State<AdListScreen> {
             icon: const Icon(Icons.clear, size: 20),
             label: const Text('Clear', style: TextStyle(fontWeight: FontWeight.bold)),
           ),
+          const SizedBox(width: 10),
+          ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              minimumSize: const Size(140, 50),
+              backgroundColor: const Color(0xFF1565C0),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              elevation: 2,
+            ),
+            onPressed: _exportPdf,
+            icon: const Icon(Icons.picture_as_pdf, size: 20),
+            label: const Text('Export PDF', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+          const SizedBox(width: 20),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 15),
+            decoration: BoxDecoration(
+              border: Border.all(color: Colors.grey[300]!),
+              borderRadius: BorderRadius.circular(8),
+              color: Colors.grey[50],
+            ),
+            child: DropdownButton<int>(
+              value: _pageSize,
+              underline: const SizedBox(),
+              items: _pageSizeOptions.map((size) {
+                return DropdownMenuItem<int>(
+                  value: size,
+                  child: Text('$size per page', style: const TextStyle(fontSize: 14)),
+                );
+              }).toList(),
+              onChanged: (value) {
+                if (value != null) {
+                  setState(() {
+                    _pageSize = value;
+                    _currentPage = 1;
+                    _loadAds();
+                  });
+                }
+              },
+            ),
+          ),
         ],
       ),
     );
@@ -208,38 +251,42 @@ class _AdListScreenState extends State<AdListScreen> {
     }
 
     return Container(
-      margin: const EdgeInsets.all(20),
+      margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: Colors.grey.withOpacity(0.1),
-            spreadRadius: 1,
-            blurRadius: 4,
+            color: Colors.black.withOpacity(0.08),
+            spreadRadius: 0,
+            blurRadius: 8,
             offset: const Offset(0, 2),
           ),
         ],
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
         child: SingleChildScrollView(
           scrollDirection: Axis.horizontal,
           child: SingleChildScrollView(
             child: DataTable(
-              headingRowColor: WidgetStateProperty.all(const Color(0xFF0D47A1).withOpacity(0.05)),
-              columnSpacing: 30,
+              headingRowColor: WidgetStateProperty.all(const Color(0xFF0D47A1)),
+              headingRowHeight: 56,
+              dataRowHeight: 60,
+              columnSpacing: 32,
+              horizontalMargin: 24,
+              dividerThickness: 1,
               columns: const [
-                DataColumn(label: Text('Title', style: TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF0D47A1)))),
-                DataColumn(label: Text('Type', style: TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF0D47A1)))),
-                DataColumn(label: Text('Price', style: TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF0D47A1)))),
-                DataColumn(label: Text('Location', style: TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF0D47A1)))),
-                DataColumn(label: Text('Owner', style: TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF0D47A1)))),
-                DataColumn(label: Text('Status', style: TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF0D47A1)))),
-                DataColumn(label: Text('Created', style: TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF0D47A1)))),
-                DataColumn(label: Text('Actions', style: TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF0D47A1)))),
+                DataColumn(label: Text('Title', style: TextStyle(fontWeight: FontWeight.w600, color: Colors.white, fontSize: 13))),
+                DataColumn(label: Text('Type', style: TextStyle(fontWeight: FontWeight.w600, color: Colors.white, fontSize: 13))),
+                DataColumn(label: Text('Owner', style: TextStyle(fontWeight: FontWeight.w600, color: Colors.white, fontSize: 13))),
+                DataColumn(label: Text('Status', style: TextStyle(fontWeight: FontWeight.w600, color: Colors.white, fontSize: 13))),
+                DataColumn(label: Text('Created', style: TextStyle(fontWeight: FontWeight.w600, color: Colors.white, fontSize: 13))),
+                DataColumn(label: Text('Actions', style: TextStyle(fontWeight: FontWeight.w600, color: Colors.white, fontSize: 13))),
               ],
-              rows: ads.map((ad) => _buildAdRow(ad)).toList(),
+              rows: ads.asMap().entries.map((entry) {
+                return _buildAdRow(ads[entry.key], entry.key.isEven);
+              }).toList(),
             ),
           ),
         ),
@@ -247,7 +294,7 @@ class _AdListScreenState extends State<AdListScreen> {
     );
   }
 
-  DataRow _buildAdRow(Ad ad) {
+  DataRow _buildAdRow(Ad ad, bool isEven) {
     Color statusColor;
     switch (ad.status) {
       case 'Active':
@@ -264,10 +311,13 @@ class _AdListScreenState extends State<AdListScreen> {
     }
 
     return DataRow(
+      color: WidgetStateProperty.all(
+        isEven ? Colors.grey.withOpacity(0.02) : Colors.white,
+      ),
       cells: [
         DataCell(
           SizedBox(
-            width: 200,
+            width: 280,
             child: Text(
               ad.title ?? '',
               style: const TextStyle(fontWeight: FontWeight.w500),
@@ -292,8 +342,6 @@ class _AdListScreenState extends State<AdListScreen> {
             ),
           ),
         ),
-        DataCell(Text(formatCurrency(ad.price))),
-        DataCell(Text(ad.location ?? '-')),
         DataCell(Text(ad.ownerUsername ?? '-')),
         DataCell(
           Container(
@@ -389,41 +437,78 @@ class _AdListScreenState extends State<AdListScreen> {
     _loadAds();
   }
 
+  Future<void> _exportPdf() async {
+    final ads = _adsResult?.result ?? [];
+    if (ads.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No ads to export.')),
+      );
+      return;
+    }
+    final filters = <String>[];
+    if (_searchController.text.isNotEmpty) filters.add('search="${_searchController.text}"');
+    if (_selectedType != null) filters.add('type=$_selectedType');
+    try {
+      final bytes = await ReportService.buildAdsReport(
+        ads,
+        filterLabel: filters.isEmpty ? null : filters.join(', '),
+      );
+      final path = await ReportService.exportPdf(bytes, 'jumpin-ads-report');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Report saved to $path')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not generate report: $e')),
+        );
+      }
+    }
+  }
+
+  Color _statusColor(String? status) {
+    switch (status) {
+      case 'Active':
+        return Colors.green;
+      case 'Pending':
+        return Colors.orange;
+      default:
+        return Colors.grey;
+    }
+  }
+
   void _showAdDetails(Ad ad) {
     showDialog(
       context: context,
       builder: (context) {
-        return AlertDialog(
-          title: Text(ad.title ?? 'Ad Details'),
-          content: SizedBox(
-            width: 500,
-            child: SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _detailRow('Type', ad.type),
-                  _detailRow('Price', formatCurrency(ad.price)),
-                  _detailRow('Location', ad.location),
-                  _detailRow('Address', ad.address),
-                  _detailRow('Owner', ad.ownerUsername),
-                  _detailRow('Status', ad.status),
-                  _detailRow('Category', ad.category),
-                  _detailRow('Capacity', ad.capacity?.toString()),
-                  _detailRow('Created', formatDate(ad.createdAt)),
-                  _detailRow('Updated', formatDate(ad.updatedAt)),
-                  _detailRow('Rating', ad.averageRating?.toStringAsFixed(1)),
-                  _detailRow('Total Reviews', ad.totalReviews?.toString()),
-                  if (ad.description != null && ad.description!.isNotEmpty) ...[
-                    const SizedBox(height: 12),
-                    const Text('Description:', style: TextStyle(fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 4),
-                    Text(ad.description!),
-                  ],
-                ],
+        return DetailDialog(
+          icon: Icons.article,
+          title: ad.title ?? 'Ad Details',
+          subtitle: ad.type,
+          children: [
+            DetailRow(icon: Icons.category, label: 'Type', value: ad.type),
+            const DetailDivider(),
+            DetailRow(icon: Icons.payments, label: 'Price', value: formatCurrency(ad.price)),
+            const DetailDivider(),
+            DetailRow(
+              icon: Icons.flag,
+              label: 'Status',
+              valueWidget: Align(
+                alignment: Alignment.centerLeft,
+                child: DetailBadge(text: ad.status ?? '-', color: _statusColor(ad.status)),
               ),
             ),
-          ),
+            const DetailDivider(),
+            DetailRow(icon: Icons.location_on, label: 'Location', value: ad.location),
+            const DetailDivider(),
+            DetailRow(icon: Icons.person, label: 'Owner', value: ad.ownerUsername),
+            const DetailDivider(),
+            DetailRow(icon: Icons.calendar_today, label: 'Created', value: formatDate(ad.createdAt)),
+            if (ad.description != null && ad.description!.isNotEmpty)
+              DetailSection(label: 'Description', content: ad.description!),
+          ],
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
@@ -432,22 +517,6 @@ class _AdListScreenState extends State<AdListScreen> {
           ],
         );
       },
-    );
-  }
-
-  Widget _detailRow(String label, String? value) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 120,
-            child: Text('$label:', style: const TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF0D47A1))),
-          ),
-          Expanded(child: Text(value ?? '-')),
-        ],
-      ),
     );
   }
 

@@ -1,5 +1,5 @@
 class Ad {
-  int? id;
+  String? id;
   String? title;
   String? description;
   String? type;
@@ -8,7 +8,7 @@ class Ad {
   String? address;
   String? imageUrl;
   String? status;
-  int? ownerId;
+  String? ownerId;
   String? ownerUsername;
   String? ownerFullName;
   String? category;
@@ -48,31 +48,62 @@ class Ad {
   });
 
   Ad.fromJson(Map<String, dynamic> json) {
-    id = json['id'];
-    title = json['title'];
-    description = json['description'];
-    type = json['type'];
-    price = json['price']?.toDouble();
-    location = json['location'];
-    address = json['address'];
-    imageUrl = json['imageUrl'];
-    status = json['status'];
-    ownerId = json['ownerId'];
-    ownerUsername = json['ownerUsername'];
-    ownerFullName = json['ownerFullName'];
-    category = json['category'];
-    capacity = json['capacity'];
-    startDate =
-        json['startDate'] != null ? DateTime.parse(json['startDate']) : null;
-    endDate = json['endDate'] != null ? DateTime.parse(json['endDate']) : null;
-    createdAt =
-        json['createdAt'] != null ? DateTime.parse(json['createdAt']) : null;
-    updatedAt =
-        json['updatedAt'] != null ? DateTime.parse(json['updatedAt']) : null;
-    averageRating = json['averageRating']?.toDouble();
-    totalReviews = json['totalReviews'];
-    totalRequests = json['totalRequests'];
-    isPromoted = json['isPromoted'];
+    id = _parseString(json['id']);
+    title = _parseString(json['title']);
+    description = _parseString(json['description']);
+    type = _parseString(json['type']);
+    price = _parseDouble(json['price']);
+    location = _parseString(json['location']);
+    address = _parseString(json['address']);
+    imageUrl = _parseString(json['imageUrl']);
+    status = _parseString(json['status']);
+    ownerId = _parseString(json['ownerId']);
+    ownerUsername = _parseString(json['ownerUsername']);
+    ownerFullName = _parseString(json['ownerFullName']);
+    category = _parseString(json['category']);
+    capacity = _parseInt(json['capacity']);
+    startDate = _parseDateTime(json['startDate']);
+    endDate = _parseDateTime(json['endDate']);
+    createdAt = _parseDateTime(json['createdAt']);
+    updatedAt = _parseDateTime(json['updatedAt']);
+    averageRating = _parseDouble(json['averageRating']);
+    totalReviews = _parseInt(json['totalReviews']);
+    totalRequests = _parseInt(json['totalRequests']);
+    isPromoted = json['isPromoted'] as bool?;
+  }
+
+  static String? _parseString(dynamic value) {
+    if (value == null) return null;
+    return value.toString();
+  }
+
+  static int? _parseInt(dynamic value) {
+    if (value == null) return null;
+    if (value is int) return value;
+    if (value is double) return value.toInt();
+    if (value is String) return int.tryParse(value);
+    return null;
+  }
+
+  static double? _parseDouble(dynamic value) {
+    if (value == null) return null;
+    if (value is double) return value;
+    if (value is int) return value.toDouble();
+    if (value is String) return double.tryParse(value);
+    return null;
+  }
+
+  static DateTime? _parseDateTime(dynamic value) {
+    if (value == null) return null;
+    if (value is DateTime) return value;
+    if (value is String) {
+      try {
+        return DateTime.parse(value);
+      } catch (e) {
+        return null;
+      }
+    }
+    return null;
   }
 
   Map<String, dynamic> toJson() {

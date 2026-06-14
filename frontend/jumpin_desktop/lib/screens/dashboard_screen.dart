@@ -59,15 +59,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
         setState(() {
           if (results[0] != null) {
             _totalUsers = results[0]!.count ?? results[0]!.result?.length ?? 0;
-            _vipUsers = results[0]!.result?.where((u) => u.isVip == true).length ?? 0;
+            _vipUsers = results[0]!.result?.cast<dynamic>().where((u) => u.isVip == true).length ?? 0;
           }
           if (results[1] != null) {
             _totalAds = results[1]!.count ?? results[1]!.result?.length ?? 0;
-            _activeAds = results[1]!.result?.where((a) => a.status == 'Active').length ?? 0;
+            _activeAds = results[1]!.result?.cast<dynamic>().where((a) => a.status == 'Active').length ?? 0;
           }
           if (results[2] != null) {
             _totalRequests = results[2]!.count ?? results[2]!.result?.length ?? 0;
-            _pendingRequests = results[2]!.result?.where((r) => r.status == 'Pending').length ?? 0;
+            _pendingRequests = results[2]!.result?.cast<dynamic>().where((r) => r.status == 'Pending').length ?? 0;
           }
           if (results[3] != null) {
             _totalReviews = results[3]!.count ?? results[3]!.result?.length ?? 0;

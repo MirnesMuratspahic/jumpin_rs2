@@ -18,11 +18,11 @@ class _UserListScreenState extends State<UserListScreen> {
   SearchResult<User>? _usersResult;
   bool _isLoading = true;
 
-  final TextEditingController _usernameController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
 
   int _currentPage = 1;
-  final int _pageSize = 15;
+  int _pageSize = 50;
+  final List<int> _pageSizeOptions = [50, 100, 200];
 
   @override
   void initState() {
@@ -40,9 +40,6 @@ class _UserListScreenState extends State<UserListScreen> {
         'PageSize': _pageSize,
       };
 
-      if (_usernameController.text.isNotEmpty) {
-        filter['Username'] = _usernameController.text;
-      }
       if (_emailController.text.isNotEmpty) {
         filter['Email'] = _emailController.text;
       }
@@ -96,34 +93,6 @@ class _UserListScreenState extends State<UserListScreen> {
           Expanded(
             flex: 2,
             child: TextField(
-              controller: _usernameController,
-              decoration: InputDecoration(
-                labelText: 'Username',
-                hintText: 'Search by username...',
-                prefixIcon: const Icon(Icons.person_outline, color: Color(0xFF0D47A1)),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: BorderSide(color: Colors.grey[300]!),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: BorderSide(color: Colors.grey[300]!),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: const BorderSide(color: Color(0xFF0D47A1), width: 2),
-                ),
-                filled: true,
-                fillColor: Colors.grey[50],
-                contentPadding: const EdgeInsets.symmetric(horizontal: 15, vertical: 15),
-              ),
-              onSubmitted: (_) => _handleSearch(),
-            ),
-          ),
-          const SizedBox(width: 15),
-          Expanded(
-            flex: 2,
-            child: TextField(
               controller: _emailController,
               decoration: InputDecoration(
                 labelText: 'Email',
@@ -174,6 +143,34 @@ class _UserListScreenState extends State<UserListScreen> {
             icon: const Icon(Icons.clear, size: 20),
             label: const Text('Clear', style: TextStyle(fontWeight: FontWeight.bold)),
           ),
+          const SizedBox(width: 20),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 15),
+            decoration: BoxDecoration(
+              border: Border.all(color: Colors.grey[300]!),
+              borderRadius: BorderRadius.circular(8),
+              color: Colors.grey[50],
+            ),
+            child: DropdownButton<int>(
+              value: _pageSize,
+              underline: const SizedBox(),
+              items: _pageSizeOptions.map((size) {
+                return DropdownMenuItem<int>(
+                  value: size,
+                  child: Text('$size per page', style: const TextStyle(fontSize: 14)),
+                );
+              }).toList(),
+              onChanged: (value) {
+                if (value != null) {
+                  setState(() {
+                    _pageSize = value;
+                    _currentPage = 1;
+                    _loadUsers();
+                  });
+                }
+              },
+            ),
+          ),
         ],
       ),
     );
@@ -186,7 +183,10 @@ class _UserListScreenState extends State<UserListScreen> {
       );
     }
 
-    final users = _usersResult?.result;
+    // Filter out admin users - only show customers
+    final allUsers = _usersResult?.result;
+    final users = allUsers?.where((u) => u.role?.toUpperCase() != 'ADMIN').toList();
+
     if (users == null || users.isEmpty) {
       return const Center(
         child: Column(
@@ -204,38 +204,102 @@ class _UserListScreenState extends State<UserListScreen> {
     }
 
     return Container(
-      margin: const EdgeInsets.all(20),
+      margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: Colors.grey.withOpacity(0.1),
-            spreadRadius: 1,
-            blurRadius: 4,
+            color: Colors.black.withOpacity(0.08),
+            spreadRadius: 0,
+            blurRadius: 8,
             offset: const Offset(0, 2),
           ),
         ],
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
         child: SingleChildScrollView(
           scrollDirection: Axis.horizontal,
           child: SingleChildScrollView(
             child: DataTable(
-              headingRowColor: WidgetStateProperty.all(const Color(0xFF0D47A1).withOpacity(0.05)),
-              columnSpacing: 30,
+              headingRowColor: WidgetStateProperty.all(const Color(0xFF0D47A1)),
+              headingRowHeight: 56,
+              dataRowHeight: 60,
+              columnSpacing: 32,
+              horizontalMargin: 24,
+              dividerThickness: 1,
               columns: const [
-                DataColumn(label: Text('Username', style: TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF0D47A1)))),
-                DataColumn(label: Text('Full Name', style: TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF0D47A1)))),
-                DataColumn(label: Text('Email', style: TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF0D47A1)))),
-                DataColumn(label: Text('Status', style: TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF0D47A1)))),
-                DataColumn(label: Text('VIP', style: TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF0D47A1)))),
-                DataColumn(label: Text('Role', style: TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF0D47A1)))),
-                DataColumn(label: Text('Registered', style: TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF0D47A1)))),
-                DataColumn(label: Text('Actions', style: TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF0D47A1)))),
+                DataColumn(
+                  label: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.person, color: Colors.white, size: 18),
+                      SizedBox(width: 8),
+                      Text('Full Name', style: TextStyle(fontWeight: FontWeight.w600, color: Colors.white, fontSize: 13)),
+                    ],
+                  ),
+                ),
+                DataColumn(
+                  label: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.email, color: Colors.white, size: 18),
+                      SizedBox(width: 8),
+                      Text('Email', style: TextStyle(fontWeight: FontWeight.w600, color: Colors.white, fontSize: 13)),
+                    ],
+                  ),
+                ),
+                DataColumn(
+                  label: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.check_circle, color: Colors.white, size: 18),
+                      SizedBox(width: 8),
+                      Text('Status', style: TextStyle(fontWeight: FontWeight.w600, color: Colors.white, fontSize: 13)),
+                    ],
+                  ),
+                ),
+                DataColumn(
+                  label: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.star, color: Colors.white, size: 18),
+                      SizedBox(width: 8),
+                      Text('VIP', style: TextStyle(fontWeight: FontWeight.w600, color: Colors.white, fontSize: 13)),
+                    ],
+                  ),
+                ),
+                DataColumn(
+                  label: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.security, color: Colors.white, size: 18),
+                      SizedBox(width: 8),
+                      Text('Role', style: TextStyle(fontWeight: FontWeight.w600, color: Colors.white, fontSize: 13)),
+                    ],
+                  ),
+                ),
+                DataColumn(
+                  label: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.calendar_today, color: Colors.white, size: 18),
+                      SizedBox(width: 8),
+                      Text('Registered', style: TextStyle(fontWeight: FontWeight.w600, color: Colors.white, fontSize: 13)),
+                    ],
+                  ),
+                ),
+                DataColumn(
+                  label: Text('Actions', style: TextStyle(fontWeight: FontWeight.w600, color: Colors.white, fontSize: 13)),
+                ),
               ],
-              rows: users.map((user) => _buildUserRow(user)).toList(),
+              rows: users.asMap().entries.map((entry) {
+                int index = entry.key;
+                User user = entry.value;
+                bool isEven = index.isEven;
+                return _buildUserRow(user, isEven);
+              }).toList(),
             ),
           ),
         ),
@@ -243,12 +307,14 @@ class _UserListScreenState extends State<UserListScreen> {
     );
   }
 
-  DataRow _buildUserRow(User user) {
+  DataRow _buildUserRow(User user, bool isEven) {
     return DataRow(
+      color: WidgetStateProperty.all(
+        isEven ? Colors.grey.withOpacity(0.02) : Colors.white,
+      ),
       cells: [
-        DataCell(Text(user.username ?? '', style: const TextStyle(fontWeight: FontWeight.w500))),
-        DataCell(Text(user.fullName)),
-        DataCell(Text(user.email ?? '')),
+        DataCell(Text(user.fullName, style: const TextStyle(fontWeight: FontWeight.w500))),
+        DataCell(Text(user.email ?? '', style: const TextStyle(fontSize: 13))),
         DataCell(
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -299,30 +365,16 @@ class _UserListScreenState extends State<UserListScreen> {
             mainAxisSize: MainAxisSize.min,
             children: [
               if (user.isBlocked)
-                ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.green,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    minimumSize: Size.zero,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-                  ),
+                IconButton(
+                  icon: const Icon(Icons.person_add, color: Colors.green),
+                  tooltip: 'Unblock',
                   onPressed: () => _unblockUser(user),
-                  icon: const Icon(Icons.lock_open, size: 16),
-                  label: const Text('Unblock', style: TextStyle(fontSize: 12)),
                 )
               else
-                ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.red,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    minimumSize: Size.zero,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-                  ),
+                IconButton(
+                  icon: const Icon(Icons.person_remove, color: Colors.red),
+                  tooltip: 'Block',
                   onPressed: () => _blockUser(user),
-                  icon: const Icon(Icons.block, size: 16),
-                  label: const Text('Block', style: TextStyle(fontSize: 12)),
                 ),
             ],
           ),
@@ -385,50 +437,18 @@ class _UserListScreenState extends State<UserListScreen> {
   }
 
   void _handleClear() {
-    _usernameController.clear();
     _emailController.clear();
     _currentPage = 1;
     _loadUsers();
   }
 
   Future<void> _blockUser(User user) async {
-    final TextEditingController reasonController = TextEditingController();
-    final formKey = GlobalKey<FormState>();
-
     bool? confirmed = await showDialog<bool>(
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
           title: const Text('Block User'),
-          content: SizedBox(
-            width: 500,
-            child: Form(
-              key: formKey,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('Are you sure you want to block "${user.username}"?'),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    controller: reasonController,
-                    decoration: const InputDecoration(
-                      labelText: 'Block Reason',
-                      hintText: 'Enter the reason for blocking...',
-                      border: OutlineInputBorder(),
-                    ),
-                    maxLines: 3,
-                    validator: (value) {
-                      if (value == null || value.trim().isEmpty) {
-                        return 'Block reason is required';
-                      }
-                      return null;
-                    },
-                  ),
-                ],
-              ),
-            ),
-          ),
+          content: Text('Are you sure you want to block "${user.fullName}"?'),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(false),
@@ -439,11 +459,7 @@ class _UserListScreenState extends State<UserListScreen> {
                 backgroundColor: Colors.red,
                 foregroundColor: Colors.white,
               ),
-              onPressed: () {
-                if (formKey.currentState!.validate()) {
-                  Navigator.of(context).pop(true);
-                }
-              },
+              onPressed: () => Navigator.of(context).pop(true),
               child: const Text('Block User'),
             ),
           ],
@@ -451,16 +467,24 @@ class _UserListScreenState extends State<UserListScreen> {
       },
     );
 
-    if (confirmed == true && reasonController.text.trim().isNotEmpty) {
+    if (confirmed == true) {
       try {
-        await _userProvider.blockUser(user.id!, reasonController.text);
+        await _userProvider.blockUser(user.id!, '');
         if (context.mounted) {
           await buildSuccessAlert(context, 'Success', 'User has been blocked successfully.');
+          await _loadUsers();
         }
-        _loadUsers();
       } catch (e) {
-        if (context.mounted) {
-          await buildErrorAlert(context, 'Error', e.toString(), e as Exception);
+        // Check if it's a success with empty response
+        if (e.toString().contains('successful but response is empty')) {
+          if (context.mounted) {
+            await buildSuccessAlert(context, 'Success', 'User has been blocked successfully.');
+            await _loadUsers();
+          }
+        } else {
+          if (context.mounted) {
+            await buildErrorAlert(context, 'Error', e.toString(), e as Exception);
+          }
         }
       }
     }
@@ -472,7 +496,7 @@ class _UserListScreenState extends State<UserListScreen> {
       builder: (BuildContext context) {
         return AlertDialog(
           title: const Text('Unblock User'),
-          content: Text('Are you sure you want to unblock "${user.username}"?'),
+          content: Text('Are you sure you want to unblock "${user.fullName}"?'),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(false),
@@ -496,11 +520,19 @@ class _UserListScreenState extends State<UserListScreen> {
         await _userProvider.unblockUser(user.id!);
         if (context.mounted) {
           await buildSuccessAlert(context, 'Success', 'User has been unblocked successfully.');
+          await _loadUsers();
         }
-        _loadUsers();
       } catch (e) {
-        if (context.mounted) {
-          await buildErrorAlert(context, 'Error', e.toString(), e as Exception);
+        // Check if it's a success with empty response
+        if (e.toString().contains('successful but response is empty')) {
+          if (context.mounted) {
+            await buildSuccessAlert(context, 'Success', 'User has been unblocked successfully.');
+            await _loadUsers();
+          }
+        } else {
+          if (context.mounted) {
+            await buildErrorAlert(context, 'Error', e.toString(), e as Exception);
+          }
         }
       }
     }
@@ -508,7 +540,6 @@ class _UserListScreenState extends State<UserListScreen> {
 
   @override
   void dispose() {
-    _usernameController.dispose();
     _emailController.dispose();
     super.dispose();
   }

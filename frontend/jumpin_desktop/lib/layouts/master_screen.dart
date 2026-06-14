@@ -9,6 +9,7 @@ import 'package:jumpin_admin/screens/request_list_screen.dart';
 import 'package:jumpin_admin/screens/review_list_screen.dart';
 import 'package:jumpin_admin/screens/support_list_screen.dart';
 import 'package:jumpin_admin/screens/statistics_screen.dart';
+import 'package:jumpin_admin/screens/city_list_screen.dart';
 import 'package:jumpin_admin/main.dart';
 
 class MasterScreen extends StatefulWidget {
@@ -117,6 +118,12 @@ class _MasterScreenState extends State<MasterScreen> {
                   label: 'Support',
                   isActive: widget.title == 'Support',
                   onTap: () => _navigateTo(const SupportListScreen()),
+                ),
+                _buildNavItem(
+                  icon: Icons.location_city,
+                  label: 'Cities',
+                  isActive: widget.title == 'Cities',
+                  onTap: () => _navigateTo(const CityListScreen()),
                 ),
                 _buildNavItem(
                   icon: Icons.bar_chart,

@@ -1,0 +1,5 @@
+#include "../../Flutter/Flutter-Debug.xcconfig"
+#include "Warnings.xcconfig"
+// Build for the native architecture (arm64 on Apple Silicon). The previous
+// x86_64/Rosetta pin is no longer needed since all plugins support arm64.
+ARCHS = $(ARCHS_STANDARD)

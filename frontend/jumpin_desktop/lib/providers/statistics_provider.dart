@@ -23,68 +23,23 @@ class StatisticsProvider {
     return response.statusCode >= 200 && response.statusCode < 300;
   }
 
-  Future<Map<String, dynamic>> getOverview() async {
-    var url = "$_baseUrl/overview";
-    var uri = Uri.parse(url);
+  /// The backend exposes a single endpoint returning all admin statistics.
+  /// Every getter below reuses it so each screen map holds the full set of keys.
+  Future<Map<String, dynamic>> getStatistics() async {
+    var uri = Uri.parse(_baseUrl);
     var headers = createHeaders();
     var response = await http.get(uri, headers: headers);
 
     if (isValidResponse(response)) {
       return jsonDecode(response.body);
     } else {
-      throw Exception('Failed to load statistics overview');
+      throw Exception('Failed to load statistics');
     }
   }
 
-  Future<Map<String, dynamic>> getAdStatistics() async {
-    var url = "$_baseUrl/ads";
-    var uri = Uri.parse(url);
-    var headers = createHeaders();
-    var response = await http.get(uri, headers: headers);
-
-    if (isValidResponse(response)) {
-      return jsonDecode(response.body);
-    } else {
-      throw Exception('Failed to load ad statistics');
-    }
-  }
-
-  Future<Map<String, dynamic>> getRequestStatistics() async {
-    var url = "$_baseUrl/requests";
-    var uri = Uri.parse(url);
-    var headers = createHeaders();
-    var response = await http.get(uri, headers: headers);
-
-    if (isValidResponse(response)) {
-      return jsonDecode(response.body);
-    } else {
-      throw Exception('Failed to load request statistics');
-    }
-  }
-
-  Future<Map<String, dynamic>> getUserStatistics() async {
-    var url = "$_baseUrl/users";
-    var uri = Uri.parse(url);
-    var headers = createHeaders();
-    var response = await http.get(uri, headers: headers);
-
-    if (isValidResponse(response)) {
-      return jsonDecode(response.body);
-    } else {
-      throw Exception('Failed to load user statistics');
-    }
-  }
-
-  Future<Map<String, dynamic>> getReviewStatistics() async {
-    var url = "$_baseUrl/reviews";
-    var uri = Uri.parse(url);
-    var headers = createHeaders();
-    var response = await http.get(uri, headers: headers);
-
-    if (isValidResponse(response)) {
-      return jsonDecode(response.body);
-    } else {
-      throw Exception('Failed to load review statistics');
-    }
-  }
+  Future<Map<String, dynamic>> getOverview() => getStatistics();
+  Future<Map<String, dynamic>> getAdStatistics() => getStatistics();
+  Future<Map<String, dynamic>> getRequestStatistics() => getStatistics();
+  Future<Map<String, dynamic>> getUserStatistics() => getStatistics();
+  Future<Map<String, dynamic>> getReviewStatistics() => getStatistics();
 }

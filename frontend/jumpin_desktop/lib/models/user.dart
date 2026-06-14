@@ -1,5 +1,5 @@
 class User {
-  int? id;
+  String? id;
   String? firstName;
   String? lastName;
   String? username;
@@ -10,7 +10,7 @@ class User {
   DateTime? lastLogin;
   String? status;
   String? blockReason;
-  int? role;
+  String? role;
   bool? isVip;
   DateTime? vipActivatedAt;
   DateTime? vipExpiresAt;
@@ -40,31 +40,71 @@ class User {
   });
 
   User.fromJson(Map<String, dynamic> json) {
-    id = json['id'];
-    firstName = json['firstName'];
-    lastName = json['lastName'];
-    username = json['username'];
-    email = json['email'];
-    phone = json['phone'];
-    profileImageUrl = json['profileImageUrl'];
-    registrationDate = json['registrationDate'] != null
-        ? DateTime.parse(json['registrationDate'])
-        : null;
-    lastLogin =
-        json['lastLogin'] != null ? DateTime.parse(json['lastLogin']) : null;
-    status = json['status'];
-    blockReason = json['blockReason'];
-    role = json['role'];
-    isVip = json['isVip'];
-    vipActivatedAt = json['vipActivatedAt'] != null
-        ? DateTime.parse(json['vipActivatedAt'])
-        : null;
-    vipExpiresAt = json['vipExpiresAt'] != null
-        ? DateTime.parse(json['vipExpiresAt'])
-        : null;
-    averageRating = json['averageRating']?.toDouble();
-    totalReviews = json['totalReviews'];
-    totalAds = json['totalAds'];
+    try {
+      id = _parseString(json['id']);
+      firstName = _parseString(json['firstName']);
+      lastName = _parseString(json['lastName']);
+      username = _parseString(json['username']);
+      email = _parseString(json['email']);
+      phone = _parseString(json['phone']);
+      profileImageUrl = _parseString(json['profileImageUrl']);
+      registrationDate = _parseDateTime(json['registrationDate']);
+      lastLogin = _parseDateTime(json['lastLogin']);
+      status = _parseString(json['status']);
+      blockReason = _parseString(json['blockReason']);
+      role = _parseString(json['role']);
+      isVip = _parseBool(json['isVip']);
+      vipActivatedAt = _parseDateTime(json['vipActivatedAt']);
+      vipExpiresAt = _parseDateTime(json['vipExpiresAt']);
+      averageRating = _parseDouble(json['averageRating']);
+      totalReviews = _parseInt(json['totalReviews']);
+      totalAds = _parseInt(json['totalAds']);
+    } catch (e) {
+      throw Exception('Error parsing User from JSON: $e\nJSON: $json');
+    }
+  }
+
+  static String? _parseString(dynamic value) {
+    if (value == null) return null;
+    return value.toString();
+  }
+
+  static int? _parseInt(dynamic value) {
+    if (value == null) return null;
+    if (value is int) return value;
+    if (value is double) return value.toInt();
+    if (value is String) return int.tryParse(value);
+    return null;
+  }
+
+  static double? _parseDouble(dynamic value) {
+    if (value == null) return null;
+    if (value is double) return value;
+    if (value is int) return value.toDouble();
+    if (value is String) return double.tryParse(value);
+    return null;
+  }
+
+  static bool? _parseBool(dynamic value) {
+    if (value == null) return null;
+    if (value is bool) return value;
+    if (value is String) {
+      return value.toLowerCase() == 'true' || value == '1';
+    }
+    return null;
+  }
+
+  static DateTime? _parseDateTime(dynamic value) {
+    if (value == null) return null;
+    if (value is DateTime) return value;
+    if (value is String) {
+      try {
+        return DateTime.parse(value);
+      } catch (e) {
+        return null;
+      }
+    }
+    return null;
   }
 
   Map<String, dynamic> toJson() {
@@ -92,13 +132,13 @@ class User {
 
   String get fullName => '${firstName ?? ''} ${lastName ?? ''}'.trim();
 
-  bool get isBlocked => status == 'Blocked' || status == '1';
+  bool get isBlocked => status?.toUpperCase() == 'BLOCKED' || status == '1';
 
   String get roleName {
-    switch (role) {
-      case 0:
+    switch (role?.toUpperCase()) {
+      case 'ADMIN':
         return 'Admin';
-      case 1:
+      case 'CUSTOMER':
         return 'User';
       default:
         return 'User';

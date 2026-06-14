@@ -6,8 +6,13 @@ import 'package:jumpin_admin/providers/ad_provider.dart';
 import 'package:jumpin_admin/providers/request_provider.dart';
 import 'package:jumpin_admin/providers/review_provider.dart';
 import 'package:jumpin_admin/providers/support_provider.dart';
+import 'package:jumpin_admin/providers/city_provider.dart';
 import 'package:jumpin_admin/providers/helper_providers/utils.dart';
 import 'package:jumpin_admin/screens/dashboard_screen.dart';
+
+/// Global navigator key so non-widget code (e.g. the HTTP layer on a 401)
+/// can route back to the login screen.
+final navigatorKey = GlobalKey<NavigatorState>();
 
 class MyHttpOverrides extends HttpOverrides {
   @override
@@ -30,6 +35,7 @@ void main() {
         ChangeNotifierProvider(create: (_) => RequestProvider()),
         ChangeNotifierProvider(create: (_) => ReviewProvider()),
         ChangeNotifierProvider(create: (_) => SupportProvider()),
+        ChangeNotifierProvider(create: (_) => CityProvider()),
       ],
       child: const JumpInAdminApp(),
     ),
@@ -42,6 +48,7 @@ class JumpInAdminApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: navigatorKey,
       debugShowCheckedModeBanner: false,
       title: 'JumpIn Admin',
       theme: ThemeData(

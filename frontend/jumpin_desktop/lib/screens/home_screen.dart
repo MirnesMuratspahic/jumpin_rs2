@@ -90,8 +90,8 @@ class _LoginPageContentState extends State<LoginPageContent> {
                       TextFormField(
                         controller: _usernameController,
                         decoration: InputDecoration(
-                          labelText: "Username",
-                          hintText: "Enter your username",
+                          labelText: "Email",
+                          hintText: "Enter your email address",
                           filled: true,
                           fillColor: Colors.grey[50],
                           border: OutlineInputBorder(
@@ -110,16 +110,27 @@ class _LoginPageContentState extends State<LoginPageContent> {
                             ),
                           ),
                           prefixIcon: const Icon(
-                            Icons.person_outline,
+                            Icons.email_outlined,
                             color: Color(0xFF0D47A1),
                           ),
                         ),
                         validator: (value) {
                           if (value == null || value.trim().isEmpty) {
-                            return "Username is required";
+                            return "Email is required";
+                          }
+                          if (!value.contains('@')) {
+                            return "Please enter a valid email";
                           }
                           return null;
                         },
+                      ),
+                      const SizedBox(height: 8),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          "Admin email: desktop@jumpin.com",
+                          style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                        ),
                       ),
                       const SizedBox(height: 20),
                       TextFormField(

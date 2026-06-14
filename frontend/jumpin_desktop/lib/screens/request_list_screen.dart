@@ -5,6 +5,7 @@ import 'package:jumpin_admin/models/request.dart';
 import 'package:jumpin_admin/models/search_result.dart';
 import 'package:jumpin_admin/providers/request_provider.dart';
 import 'package:jumpin_admin/providers/helper_providers/utils.dart';
+import 'package:jumpin_admin/widgets/detail_dialog.dart';
 
 class RequestListScreen extends StatefulWidget {
   const RequestListScreen({super.key});
@@ -21,7 +22,8 @@ class _RequestListScreenState extends State<RequestListScreen> {
   String? _selectedStatus;
 
   int _currentPage = 1;
-  final int _pageSize = 15;
+  int _pageSize = 50;
+  final List<int> _pageSizeOptions = [50, 100, 200];
 
   @override
   void initState() {
@@ -112,8 +114,6 @@ class _RequestListScreenState extends State<RequestListScreen> {
                 DropdownMenuItem(value: 'Pending', child: Text('Pending')),
                 DropdownMenuItem(value: 'Accepted', child: Text('Accepted')),
                 DropdownMenuItem(value: 'Declined', child: Text('Declined')),
-                DropdownMenuItem(value: 'Cancelled', child: Text('Cancelled')),
-                DropdownMenuItem(value: 'Completed', child: Text('Completed')),
               ],
               onChanged: (value) {
                 setState(() => _selectedStatus = value);
@@ -155,6 +155,34 @@ class _RequestListScreenState extends State<RequestListScreen> {
             icon: const Icon(Icons.clear, size: 20),
             label: const Text('Clear', style: TextStyle(fontWeight: FontWeight.bold)),
           ),
+          const SizedBox(width: 20),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 15),
+            decoration: BoxDecoration(
+              border: Border.all(color: Colors.grey[300]!),
+              borderRadius: BorderRadius.circular(8),
+              color: Colors.grey[50],
+            ),
+            child: DropdownButton<int>(
+              value: _pageSize,
+              underline: const SizedBox(),
+              items: _pageSizeOptions.map((size) {
+                return DropdownMenuItem<int>(
+                  value: size,
+                  child: Text('$size per page', style: const TextStyle(fontSize: 14)),
+                );
+              }).toList(),
+              onChanged: (value) {
+                if (value != null) {
+                  setState(() {
+                    _pageSize = value;
+                    _currentPage = 1;
+                    _loadRequests();
+                  });
+                }
+              },
+            ),
+          ),
         ],
       ),
     );
@@ -185,38 +213,43 @@ class _RequestListScreenState extends State<RequestListScreen> {
     }
 
     return Container(
-      margin: const EdgeInsets.all(20),
+      margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: Colors.grey.withOpacity(0.1),
-            spreadRadius: 1,
-            blurRadius: 4,
+            color: Colors.black.withOpacity(0.08),
+            spreadRadius: 0,
+            blurRadius: 8,
             offset: const Offset(0, 2),
           ),
         ],
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
         child: SingleChildScrollView(
           scrollDirection: Axis.horizontal,
           child: SingleChildScrollView(
             child: DataTable(
-              headingRowColor: WidgetStateProperty.all(const Color(0xFF0D47A1).withOpacity(0.05)),
-              columnSpacing: 24,
+              headingRowColor: WidgetStateProperty.all(const Color(0xFF0D47A1)),
+              headingRowHeight: 56,
+              dataRowHeight: 60,
+              columnSpacing: 32,
+              horizontalMargin: 24,
+              dividerThickness: 1,
               columns: const [
-                DataColumn(label: Text('Request #', style: TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF0D47A1)))),
-                DataColumn(label: Text('Sender', style: TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF0D47A1)))),
-                DataColumn(label: Text('Receiver', style: TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF0D47A1)))),
-                DataColumn(label: Text('Ad', style: TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF0D47A1)))),
-                DataColumn(label: Text('Type', style: TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF0D47A1)))),
-                DataColumn(label: Text('Status', style: TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF0D47A1)))),
-                DataColumn(label: Text('Date', style: TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF0D47A1)))),
-                DataColumn(label: Text('Actions', style: TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF0D47A1)))),
+                DataColumn(label: Text('Sender Email', style: TextStyle(fontWeight: FontWeight.w600, color: Colors.white, fontSize: 13))),
+                DataColumn(label: Text('Receiver Email', style: TextStyle(fontWeight: FontWeight.w600, color: Colors.white, fontSize: 13))),
+                DataColumn(label: Text('Ad', style: TextStyle(fontWeight: FontWeight.w600, color: Colors.white, fontSize: 13))),
+                DataColumn(label: Text('Type', style: TextStyle(fontWeight: FontWeight.w600, color: Colors.white, fontSize: 13))),
+                DataColumn(label: Text('Status', style: TextStyle(fontWeight: FontWeight.w600, color: Colors.white, fontSize: 13))),
+                DataColumn(label: Text('Date', style: TextStyle(fontWeight: FontWeight.w600, color: Colors.white, fontSize: 13))),
+                DataColumn(label: Text('Actions', style: TextStyle(fontWeight: FontWeight.w600, color: Colors.white, fontSize: 13))),
               ],
-              rows: requests.map((req) => _buildRequestRow(req)).toList(),
+              rows: requests.asMap().entries.map((entry) {
+                return _buildRequestRow(requests[entry.key], entry.key.isEven);
+              }).toList(),
             ),
           ),
         ),
@@ -224,7 +257,7 @@ class _RequestListScreenState extends State<RequestListScreen> {
     );
   }
 
-  DataRow _buildRequestRow(Request req) {
+  DataRow _buildRequestRow(Request req, bool isEven) {
     Color statusColor;
     switch (req.status) {
       case 'Pending':
@@ -247,18 +280,15 @@ class _RequestListScreenState extends State<RequestListScreen> {
     }
 
     return DataRow(
+      color: WidgetStateProperty.all(
+        isEven ? Colors.grey.withOpacity(0.02) : Colors.white,
+      ),
       cells: [
-        DataCell(
-          Text(
-            req.requestNumber ?? '#${req.id}',
-            style: const TextStyle(fontWeight: FontWeight.w600),
-          ),
-        ),
-        DataCell(Text(req.senderUsername ?? '-')),
-        DataCell(Text(req.receiverUsername ?? '-')),
+        DataCell(Text(req.senderEmail ?? '-')),
+        DataCell(Text(req.receiverEmail ?? '-')),
         DataCell(
           SizedBox(
-            width: 150,
+            width: 220,
             child: Text(
               req.adTitle ?? '-',
               overflow: TextOverflow.ellipsis,
@@ -369,44 +399,51 @@ class _RequestListScreenState extends State<RequestListScreen> {
     return hsl.withLightness((hsl.lightness - 0.1).clamp(0.0, 1.0)).toColor();
   }
 
+  Color _statusColor(String? status) {
+    switch (status) {
+      case 'Accepted':
+        return Colors.green;
+      case 'Pending':
+        return Colors.orange;
+      case 'Declined':
+        return Colors.red;
+      default:
+        return Colors.grey;
+    }
+  }
+
   void _showRequestDetails(Request req) {
     showDialog(
       context: context,
       builder: (context) {
-        return AlertDialog(
-          title: Text('Request ${req.requestNumber ?? "#${req.id}"}'),
-          content: SizedBox(
-            width: 500,
-            child: SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _detailRow('Sender', req.senderUsername),
-                  _detailRow('Receiver', req.receiverUsername),
-                  _detailRow('Ad', req.adTitle),
-                  _detailRow('Type', req.type),
-                  _detailRow('Status', req.status),
-                  _detailRow('Number of People', req.numberOfPeople?.toString()),
-                  _detailRow('Requested Date', formatDate(req.requestedDate)),
-                  _detailRow('Created', formatDateTime(req.createdAt)),
-                  _detailRow('Responded', formatDateTime(req.respondedAt)),
-                  if (req.message != null && req.message!.isNotEmpty) ...[
-                    const SizedBox(height: 12),
-                    const Text('Message:', style: TextStyle(fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 4),
-                    Text(req.message!),
-                  ],
-                  if (req.responseMessage != null && req.responseMessage!.isNotEmpty) ...[
-                    const SizedBox(height: 12),
-                    const Text('Response:', style: TextStyle(fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 4),
-                    Text(req.responseMessage!),
-                  ],
-                ],
+        return DetailDialog(
+          icon: Icons.swap_horiz,
+          title: 'Request ${req.requestNumber ?? "#${req.id}"}',
+          subtitle: req.adTitle,
+          children: [
+            DetailRow(icon: Icons.person, label: 'Sender', value: req.senderEmail ?? req.senderUsername),
+            const DetailDivider(),
+            DetailRow(icon: Icons.person_outline, label: 'Receiver', value: req.receiverEmail ?? req.receiverUsername),
+            const DetailDivider(),
+            DetailRow(icon: Icons.article, label: 'Ad', value: req.adTitle),
+            const DetailDivider(),
+            DetailRow(icon: Icons.category, label: 'Type', value: req.type),
+            const DetailDivider(),
+            DetailRow(
+              icon: Icons.flag,
+              label: 'Status',
+              valueWidget: Align(
+                alignment: Alignment.centerLeft,
+                child: DetailBadge(text: req.status ?? '-', color: _statusColor(req.status)),
               ),
             ),
-          ),
+            const DetailDivider(),
+            DetailRow(icon: Icons.calendar_today, label: 'Created', value: formatDateTime(req.createdAt)),
+            const DetailDivider(),
+            DetailRow(icon: Icons.reply, label: 'Responded', value: formatDateTime(req.respondedAt)),
+            if (req.message != null && req.message!.isNotEmpty)
+              DetailSection(label: 'Message', content: req.message!),
+          ],
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
@@ -415,22 +452,6 @@ class _RequestListScreenState extends State<RequestListScreen> {
           ],
         );
       },
-    );
-  }
-
-  Widget _detailRow(String label, String? value) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 140,
-            child: Text('$label:', style: const TextStyle(fontWeight: FontWeight.w600, color: Color(0xFF0D47A1))),
-          ),
-          Expanded(child: Text(value ?? '-')),
-        ],
-      ),
     );
   }
 

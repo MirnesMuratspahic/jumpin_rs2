@@ -14,7 +14,7 @@ class RequestProvider extends BaseProvider<Request> {
     return Request.fromJson(data);
   }
 
-  Future<Request> acceptRequest(int id) async {
+  Future<Request> acceptRequest(String id) async {
     var url = "$baseUrl/Request/$id/accept";
     var uri = Uri.parse(url);
     var headers = createHeaders();
@@ -37,7 +37,7 @@ class RequestProvider extends BaseProvider<Request> {
     }
   }
 
-  Future<Request> declineRequest(int id) async {
+  Future<Request> declineRequest(String id) async {
     var url = "$baseUrl/Request/$id/decline";
     var uri = Uri.parse(url);
     var headers = createHeaders();
