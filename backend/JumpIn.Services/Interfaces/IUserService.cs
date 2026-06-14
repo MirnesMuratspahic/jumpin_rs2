@@ -8,9 +8,13 @@ namespace JumpIn.Services.Interfaces
     public interface IUserService : ICRUDService<UserModel, UserSearchObject, UserInsertRequest, UserUpdateRequest>
     {
         Task<UserModel> LoginAsync(LoginRequest request);
-        Task<UserModel> BlockUserAsync(int id, BlockUserRequest request);
-        Task<UserModel> UnblockUserAsync(int id);
-        Task<UserModel> ActivateVipAsync(int id);
-        Task<UserStatistics> GetUserStatisticsAsync(int id);
+        Task<UserModel> BlockUserAsync(Guid id, BlockUserRequest request);
+        Task<UserModel> UnblockUserAsync(Guid id);
+        Task<UserModel> ActivateVipAsync(Guid id);
+        Task<UserStatistics> GetUserStatisticsAsync(Guid id);
+        Task LogoutAsync(Guid id);
+        Task ChangePasswordAsync(Guid id, ChangePasswordRequest request, bool requireCurrentPassword);
+        Task RequestPasswordResetAsync(string email);
+        Task ResetPasswordAsync(ResetPasswordRequest request);
     }
 }

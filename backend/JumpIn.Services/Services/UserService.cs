@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using JumpIn.Models.DTOs;
 using JumpIn.Models.Enums;
 using JumpIn.Models.Exceptions;
@@ -9,16 +10,19 @@ using JumpIn.Services.Database;
 using JumpIn.Services.Interfaces;
 using Mapster;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace JumpIn.Services.Services
 {
     public class UserService : BaseCRUDService<UserModel, UserSearchObject, User, UserInsertRequest, UserUpdateRequest>, IUserService
     {
         private readonly IMessagePublisher _messagePublisher;
+        private readonly ILogger<UserService> _logger;
 
-        public UserService(JumpInDbContext context, IMessagePublisher messagePublisher) : base(context)
+        public UserService(JumpInDbContext context, IMessagePublisher messagePublisher, ILogger<UserService> logger) : base(context)
         {
             _messagePublisher = messagePublisher;
+            _logger = logger;
         }
 
         protected override IQueryable<User> AddFilter(IQueryable<User> query, UserSearchObject search)
@@ -56,6 +60,7 @@ namespace JumpIn.Services.Services
                 throw new UserException("A user with this email already exists.");
 
             entity.PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password);
+            entity.SecurityStamp = Guid.NewGuid().ToString("N");
             entity.RegistrationDate = DateTime.UtcNow;
             entity.Status = UserStatus.Active;
             entity.Role = UserRole.Customer;
@@ -64,16 +69,26 @@ namespace JumpIn.Services.Services
 
         protected override void AfterInsert(UserInsertRequest request, User entity)
         {
+            // Welcome email is best-effort and async; don't block registration.
+            _ = PublishWelcomeEmailAsync(entity.Email, entity.FirstName, entity.Id);
+        }
+
+        private async Task PublishWelcomeEmailAsync(string email, string firstName, Guid userId)
+        {
             try
             {
-                _messagePublisher.PublishEmail(new EmailMessage
+                await _messagePublisher.PublishEmailAsync(new EmailMessage
                 {
-                    To = entity.Email,
+                    To = email,
                     Subject = "Welcome to JumpIn!",
-                    Body = $"<h2>Welcome, {entity.FirstName}!</h2><p>Your account has been successfully created. Start exploring ads and find what you need!</p>"
+                    Body = $"<h2>Welcome, {firstName}!</h2><p>Your account has been successfully created. Start exploring ads and find what you need!</p>"
                 });
             }
-            catch { }
+            catch (Exception ex)
+            {
+                // Registration has already succeeded; just log the delivery failure.
+                _logger.LogError(ex, "Failed to publish welcome email for user {UserId}.", userId);
+            }
         }
 
         protected override void BeforeUpdate(UserUpdateRequest request, User entity)
@@ -136,10 +151,111 @@ namespace JumpIn.Services.Services
             if (!BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
                 throw new UserException("Invalid email or password.");
 
+            // Ensure a security stamp exists (e.g. for seeded users) so the
+            // issued token can be validated/revoked server-side.
+            if (string.IsNullOrEmpty(user.SecurityStamp))
+                user.SecurityStamp = Guid.NewGuid().ToString("N");
+
             user.LastLogin = DateTime.UtcNow;
             await _context.SaveChangesAsync();
 
             return user.Adapt<UserModel>();
+        }
+
+        public async Task LogoutAsync(Guid id)
+        {
+            var user = await _context.Users.FindAsync(id);
+            if (user == null || user.IsDeleted)
+                throw new UserException("User not found.");
+
+            // Regenerate the stamp → all previously-issued tokens are now invalid.
+            user.SecurityStamp = Guid.NewGuid().ToString("N");
+            await _context.SaveChangesAsync();
+        }
+
+        public async Task ChangePasswordAsync(Guid id, ChangePasswordRequest request, bool requireCurrentPassword)
+        {
+            var user = await _context.Users.FindAsync(id);
+            if (user == null || user.IsDeleted)
+                throw new UserException("User not found.");
+
+            if (string.IsNullOrWhiteSpace(request.NewPassword) || request.NewPassword.Length < 6)
+                throw new UserException("New password must be at least 6 characters.");
+
+            if (request.NewPassword != request.ConfirmNewPassword)
+                throw new UserException("New password and confirmation do not match.");
+
+            if (requireCurrentPassword)
+            {
+                if (string.IsNullOrEmpty(request.CurrentPassword) ||
+                    !BCrypt.Net.BCrypt.Verify(request.CurrentPassword, user.PasswordHash))
+                    throw new UserException("Current password is incorrect.");
+            }
+
+            user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.NewPassword);
+            // Changing the password invalidates existing sessions.
+            user.SecurityStamp = Guid.NewGuid().ToString("N");
+            await _context.SaveChangesAsync();
+        }
+
+        public async Task RequestPasswordResetAsync(string email)
+        {
+            var user = await _context.Users.FirstOrDefaultAsync(
+                u => u.Email.ToLower() == email.ToLower() && !u.IsDeleted);
+
+            // Don't reveal whether the email exists.
+            if (user == null) return;
+
+            // Cryptographically-secure 6-digit code; only its hash is stored.
+            var code = RandomNumberGenerator.GetInt32(0, 1_000_000).ToString("D6");
+            user.ResetPasswordCodeHash = BCrypt.Net.BCrypt.HashPassword(code);
+            user.ResetPasswordExpiresAt = DateTime.UtcNow.AddMinutes(15);
+            await _context.SaveChangesAsync();
+
+            try
+            {
+                await _messagePublisher.PublishEmailAsync(new EmailMessage
+                {
+                    To = user.Email,
+                    Subject = "JumpIn password reset code",
+                    Body = $"<h2>Password reset</h2><p>Your password reset code is <strong>{code}</strong>. It expires in 15 minutes.</p><p>If you didn't request this, you can safely ignore this email.</p>"
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to send password reset email for user {UserId}.", user.Id);
+            }
+        }
+
+        public async Task ResetPasswordAsync(ResetPasswordRequest request)
+        {
+            var user = await _context.Users.FirstOrDefaultAsync(
+                u => u.Email.ToLower() == request.Email.ToLower() && !u.IsDeleted);
+
+            if (user == null ||
+                string.IsNullOrEmpty(user.ResetPasswordCodeHash) ||
+                user.ResetPasswordExpiresAt == null)
+                throw new UserException("Invalid or expired reset code.");
+
+            if (user.ResetPasswordExpiresAt < DateTime.UtcNow)
+                throw new UserException("The reset code has expired. Please request a new one.");
+
+            if (string.IsNullOrEmpty(request.Code) ||
+                !BCrypt.Net.BCrypt.Verify(request.Code, user.ResetPasswordCodeHash))
+                throw new UserException("Invalid or expired reset code.");
+
+            if (string.IsNullOrWhiteSpace(request.NewPassword) || request.NewPassword.Length < 6)
+                throw new UserException("New password must be at least 6 characters.");
+
+            if (request.NewPassword != request.ConfirmNewPassword)
+                throw new UserException("New password and confirmation do not match.");
+
+            user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.NewPassword);
+            user.ResetPasswordCodeHash = null;
+            user.ResetPasswordExpiresAt = null;
+            // Reset invalidates existing sessions.
+            user.SecurityStamp = Guid.NewGuid().ToString("N");
+            await _context.SaveChangesAsync();
         }
 
         public async Task<UserModel> BlockUserAsync(Guid id, BlockUserRequest request)

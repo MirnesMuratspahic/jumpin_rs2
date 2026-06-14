@@ -1,8 +1,14 @@
+using System.Text.Json.Serialization;
+
 namespace JumpIn.Models.DTOs
 {
     public class UserModel
     {
         public Guid Id { get; set; }
+
+        // Server-side use only (token validation); never returned to clients.
+        [JsonIgnore]
+        public string? SecurityStamp { get; set; }
         public string FirstName { get; set; }
         public string LastName { get; set; }
         public string Email { get; set; }
@@ -16,6 +22,7 @@ namespace JumpIn.Models.DTOs
         public bool IsVip { get; set; }
         public DateTime? VipActivatedAt { get; set; }
         public DateTime? VipExpiresAt { get; set; }
+        public bool VipCancelAtPeriodEnd { get; set; }
         public decimal AverageRating { get; set; }
         public int TotalReviews { get; set; }
         public int TotalAds { get; set; }

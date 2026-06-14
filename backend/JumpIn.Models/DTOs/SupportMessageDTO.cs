@@ -13,5 +13,14 @@ namespace JumpIn.Models.DTOs
         public Guid UserId { get; set; }
         public string? UserUsername { get; set; }
         public string? UserEmail { get; set; }
+        public List<ChatMessageDTO> ChatMessages { get; set; } = new();
+    }
+
+    public class ChatMessageDTO
+    {
+        public Guid Id { get; set; }
+        public string Message { get; set; }
+        public bool IsAdminMessage { get; set; }
+        public DateTime CreatedAt { get; set; }
     }
 }

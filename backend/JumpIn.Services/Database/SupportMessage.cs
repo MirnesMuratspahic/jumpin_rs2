@@ -4,7 +4,7 @@ namespace JumpIn.Services.Database
 {
     public class SupportMessage
     {
-        public int Id { get; set; }
+        public Guid Id { get; set; }
         public string Subject { get; set; }
         public string Message { get; set; }
         public string? Response { get; set; }
@@ -12,7 +12,8 @@ namespace JumpIn.Services.Database
         public DateTime CreatedAt { get; set; }
         public DateTime? RespondedAt { get; set; }
 
-        public int UserId { get; set; }
+        public Guid UserId { get; set; }
         public virtual User User { get; set; }
+        public virtual List<SupportChat> ChatMessages { get; set; } = new();
     }
 }
