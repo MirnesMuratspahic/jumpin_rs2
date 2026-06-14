@@ -1,8 +1,11 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../models/support_message.dart';
 import '../providers/support_provider.dart';
 import '../providers/auth_provider.dart';
+import '../utils/app_logger.dart';
+import '../utils/error_handler.dart';
 
 class SupportScreen extends StatefulWidget {
   final AuthProvider authProvider;
@@ -10,13 +13,16 @@ class SupportScreen extends StatefulWidget {
   const SupportScreen({super.key, required this.authProvider});
 
   @override
-  State<SupportScreen> createState() => _SupportScreenState();
+  State<SupportScreen> createState() => SupportScreenState();
 }
 
-class _SupportScreenState extends State<SupportScreen> {
+class SupportScreenState extends State<SupportScreen> {
   final _supportProvider = SupportProvider();
   List<SupportMessage> _messages = [];
   bool _isLoading = true;
+  final _messageController = TextEditingController();
+  bool _isSending = false;
+  Timer? _pollTimer;
 
   static const Color _primaryColor = Color(0xFF1565C0);
 
@@ -25,20 +31,58 @@ class _SupportScreenState extends State<SupportScreen> {
     super.initState();
     _supportProvider.setToken(widget.authProvider.token);
     _loadMessages();
+    // Live-refresh the chat so admin replies appear while the screen is open.
+    _pollTimer = Timer.periodic(
+      const Duration(seconds: 5),
+      (_) => _loadMessages(silent: true),
+    );
   }
 
-  Future<void> _loadMessages() async {
-    setState(() {
-      _isLoading = true;
-    });
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _loadMessages();
+  }
+
+  @override
+  void dispose() {
+    _pollTimer?.cancel();
+    _messageController.dispose();
+    super.dispose();
+  }
+
+  /// Reloads the chat. Called when the Support tab becomes active again.
+  void reload() => _loadMessages();
+
+  Future<void> _loadMessages({bool silent = false}) async {
+    if (!silent) {
+      setState(() {
+        _isLoading = true;
+      });
+    }
 
     final userId = widget.authProvider.currentUser?.id;
     if (userId != null) {
-      final messages = await _supportProvider.getMessages(userId: userId);
-      setState(() {
-        _messages = messages;
-        _isLoading = false;
-      });
+      try {
+        final messages = await _supportProvider.getMessages(userId: userId);
+        if (!mounted) return;
+        setState(() {
+          _messages = messages;
+          _isLoading = false;
+        });
+      } catch (e) {
+        if (!mounted) return;
+        setState(() {
+          _isLoading = false;
+        });
+        // Don't interrupt with a SnackBar (or force logout) on the 5s poll;
+        // only surface errors on an explicit/foreground load.
+        if (silent) {
+          logError('Support poll failed', e);
+        } else {
+          showApiError(context, e);
+        }
+      }
     } else {
       setState(() {
         _isLoading = false;
@@ -46,399 +90,118 @@ class _SupportScreenState extends State<SupportScreen> {
     }
   }
 
-  void _showNewMessageForm() {
-    final subjectController = TextEditingController();
-    final messageController = TextEditingController();
-    final formKey = GlobalKey<FormState>();
-    bool isSending = false;
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setModalState) => Container(
-          height: MediaQuery.of(context).size.height * 0.65,
-          decoration: const BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-          ),
-          padding: EdgeInsets.only(
-            bottom: MediaQuery.of(context).viewInsets.bottom,
-          ),
-          child: SingleChildScrollView(
-            child: Column(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 12, 8, 0),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        'New Support Message',
-                        style: TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      IconButton(
-                        onPressed: () => Navigator.pop(context),
-                        icon: const Icon(Icons.close),
-                      ),
-                    ],
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
-                  child: Form(
-                    key: formKey,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const SizedBox(height: 8),
-                        Text(
-                          'Describe your issue and we will get back to you.',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.grey[600],
-                          ),
-                        ),
-                        const SizedBox(height: 20),
-                        TextFormField(
-                          controller: subjectController,
-                          decoration: InputDecoration(
-                            labelText: 'Subject *',
-                            prefixIcon: const Icon(Icons.subject),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                          validator: (value) {
-                            if (value == null || value.trim().isEmpty) {
-                              return 'Please enter a subject';
-                            }
-                            return null;
-                          },
-                        ),
-                        const SizedBox(height: 16),
-                        TextFormField(
-                          controller: messageController,
-                          maxLines: 5,
-                          decoration: InputDecoration(
-                            labelText: 'Message *',
-                            alignLabelWithHint: true,
-                            prefixIcon: const Padding(
-                              padding: EdgeInsets.only(bottom: 80),
-                              child: Icon(Icons.message),
-                            ),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                          validator: (value) {
-                            if (value == null || value.trim().isEmpty) {
-                              return 'Please enter your message';
-                            }
-                            return null;
-                          },
-                        ),
-                        const SizedBox(height: 20),
-                        SizedBox(
-                          width: double.infinity,
-                          child: ElevatedButton(
-                            onPressed: isSending
-                                ? null
-                                : () async {
-                                    if (!formKey.currentState!.validate())
-                                      return;
-
-                                    setModalState(() {
-                                      isSending = true;
-                                    });
-
-                                    final userId = widget
-                                        .authProvider.currentUser?.id;
-                                    if (userId == null) return;
-
-                                    final success =
-                                        await _supportProvider.sendMessage(
-                                      userId: userId,
-                                      subject:
-                                          subjectController.text.trim(),
-                                      message:
-                                          messageController.text.trim(),
-                                    );
-
-                                    setModalState(() {
-                                      isSending = false;
-                                    });
-
-                                    if (mounted) {
-                                      Navigator.pop(context);
-                                      if (success) {
-                                        ScaffoldMessenger.of(context)
-                                            .showSnackBar(
-                                          const SnackBar(
-                                            content: Text(
-                                                'Message sent successfully!'),
-                                            backgroundColor: Colors.green,
-                                          ),
-                                        );
-                                        _loadMessages();
-                                      } else {
-                                        ScaffoldMessenger.of(context)
-                                            .showSnackBar(
-                                          const SnackBar(
-                                            content: Text(
-                                                'Could not send your support message. Please try again later.'),
-                                            backgroundColor: Colors.red,
-                                          ),
-                                        );
-                                      }
-                                    }
-                                  },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: _primaryColor,
-                              foregroundColor: Colors.white,
-                              padding:
-                                  const EdgeInsets.symmetric(vertical: 16),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                            ),
-                            child: isSending
-                                ? const SizedBox(
-                                    height: 20,
-                                    width: 20,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      color: Colors.white,
-                                    ),
-                                  )
-                                : const Text(
-                                    'Send Message',
-                                    style: TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _showMessageDetail(SupportMessage message) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        height: MediaQuery.of(context).size.height * 0.6,
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Align(
-                alignment: Alignment.topRight,
-                child: IconButton(
-                  onPressed: () => Navigator.pop(context),
-                  icon: const Icon(Icons.close),
-                ),
-              ),
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      message.subject,
-                      style: const TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                  _buildStatusBadge(message.status),
-                ],
-              ),
-              if (message.createdAt != null) ...[
-                const SizedBox(height: 8),
-                Text(
-                  'Sent: ${DateFormat('dd MMM yyyy, HH:mm').format(message.createdAt!)}',
-                  style: TextStyle(fontSize: 13, color: Colors.grey[600]),
-                ),
-              ],
-              const SizedBox(height: 20),
-              const Text(
-                'Your Message',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.blue[50],
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.blue[100]!),
-                ),
-                child: Text(
-                  message.message,
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.grey[800],
-                    height: 1.5,
-                  ),
-                ),
-              ),
-              if (message.hasResponse) ...[
-                const SizedBox(height: 20),
-                const Text(
-                  'Admin Response',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.green[50],
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.green[100]!),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Icon(
-                            Icons.support_agent,
-                            size: 18,
-                            color: Colors.green[700],
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            'Support Team',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: Colors.green[700],
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        message.response!,
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.grey[800],
-                          height: 1.5,
-                        ),
-                      ),
-                      if (message.respondedAt != null) ...[
-                        const SizedBox(height: 8),
-                        Text(
-                          'Responded: ${DateFormat('dd MMM yyyy, HH:mm').format(message.respondedAt!)}',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey[500],
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-              ] else ...[
-                const SizedBox(height: 20),
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.orange[50],
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.orange[100]!),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(Icons.schedule, color: Colors.orange[700]),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          'Waiting for admin response...',
-                          style: TextStyle(
-                            color: Colors.orange[800],
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildStatusBadge(String status) {
-    Color color;
-    IconData icon;
-
-    switch (status) {
-      case 'Resolved':
-      case 'Closed':
-        color = Colors.green;
-        icon = Icons.check_circle;
-        break;
-      case 'InProgress':
-        color = Colors.blue;
-        icon = Icons.autorenew;
-        break;
-      default:
-        color = Colors.orange;
-        icon = Icons.schedule;
+  Future<void> _sendMessage() async {
+    if (_messageController.text.trim().isEmpty) {
+      return;
     }
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: color,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 14, color: Colors.white),
-          const SizedBox(width: 4),
-          Text(
-            status,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 11,
-              fontWeight: FontWeight.bold,
+    setState(() {
+      _isSending = true;
+    });
+
+    try {
+      await _supportProvider.sendMessage(
+        userId: widget.authProvider.currentUser?.id ?? '',
+        subject: 'Support',
+        message: _messageController.text.trim(),
+      );
+
+      if (mounted) {
+        setState(() {
+          _isSending = false;
+        });
+        _messageController.clear();
+        _loadMessages();
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isSending = false;
+        });
+        showApiError(context, e);
+      }
+    }
+  }
+
+  List<Widget> _buildChatBubbles() {
+    final bubbles = <Widget>[];
+
+    for (final msg in _messages) {
+      if (msg.chatMessages.isNotEmpty) {
+        for (final chat in msg.chatMessages) {
+          bubbles.add(_buildBubble(
+            text: chat.message,
+            isAdmin: chat.isAdminMessage,
+            time: chat.createdAt,
+          ));
+        }
+      } else {
+        bubbles.add(_buildBubble(
+          text: msg.message,
+          isAdmin: false,
+          time: msg.createdAt,
+        ));
+        if (msg.hasResponse) {
+          bubbles.add(_buildBubble(
+            text: msg.response!,
+            isAdmin: true,
+            time: msg.respondedAt,
+          ));
+        }
+      }
+    }
+
+    return bubbles;
+  }
+
+  Widget _buildBubble({
+    required String text,
+    required bool isAdmin,
+    required DateTime? time,
+  }) {
+    return Align(
+      alignment: isAdmin ? Alignment.centerLeft : Alignment.centerRight,
+      child: Container(
+        constraints: BoxConstraints(
+          maxWidth: MediaQuery.of(context).size.width * 0.7,
+        ),
+        padding: const EdgeInsets.all(12),
+        margin: const EdgeInsets.only(bottom: 8),
+        decoration: BoxDecoration(
+          color: isAdmin ? Colors.grey[200] : _primaryColor,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Column(
+          crossAxisAlignment:
+              isAdmin ? CrossAxisAlignment.start : CrossAxisAlignment.end,
+          children: [
+            if (isAdmin) ...[
+              const Text(
+                'Support Team',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 12,
+                ),
+              ),
+              const SizedBox(height: 4),
+            ],
+            SelectableText(
+              text,
+              style: TextStyle(
+                color: isAdmin ? Colors.black87 : Colors.white,
+                fontSize: 14,
+              ),
             ),
-          ),
-        ],
+            const SizedBox(height: 4),
+            Text(
+              DateFormat('MMM dd, HH:mm').format(time ?? DateTime.now()),
+              style: TextStyle(
+                color: isAdmin ? Colors.grey[600] : Colors.white.withAlpha(180),
+                fontSize: 11,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -446,154 +209,107 @@ class _SupportScreenState extends State<SupportScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey[50],
       appBar: AppBar(
         title: const Text('Support'),
         backgroundColor: _primaryColor,
-        foregroundColor: Colors.white,
-        automaticallyImplyLeading: false,
       ),
-      body: _isLoading
-          ? const Center(
-              child: CircularProgressIndicator(color: _primaryColor),
+      body: Column(
+        children: [
+          if (_isLoading)
+            const Padding(
+              padding: EdgeInsets.all(16),
+              child: CircularProgressIndicator(),
             )
-          : RefreshIndicator(
-              onRefresh: _loadMessages,
-              color: _primaryColor,
-              child: _messages.isEmpty
-                  ? SingleChildScrollView(
-                      physics: const AlwaysScrollableScrollPhysics(),
-                      child: Container(
-                        height: MediaQuery.of(context).size.height - 250,
-                        alignment: Alignment.center,
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.support_agent,
-                              size: 80,
-                              color: Colors.grey[400],
-                            ),
-                            const SizedBox(height: 16),
-                            Text(
-                              'No support messages yet',
-                              style: TextStyle(
-                                fontSize: 18,
-                                color: Colors.grey[600],
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              'Tap the button below to contact support',
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: Colors.grey[500],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    )
-                  : ListView.builder(
-                      padding: const EdgeInsets.all(16),
-                      physics: const AlwaysScrollableScrollPhysics(),
-                      itemCount: _messages.length,
-                      itemBuilder: (context, index) {
-                        return _buildMessageCard(_messages[index]);
-                      },
-                    ),
-            ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _showNewMessageForm,
-        backgroundColor: _primaryColor,
-        foregroundColor: Colors.white,
-        icon: const Icon(Icons.edit),
-        label: const Text('New Message'),
-      ),
-    );
-  }
-
-  Widget _buildMessageCard(SupportMessage message) {
-    return GestureDetector(
-      onTap: () => _showMessageDetail(message),
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withAlpha(15),
-              blurRadius: 10,
-              offset: const Offset(0, 3),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    message.subject,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+          else if (_messages.isEmpty)
+            Expanded(
+              child: Center(
+                child: Text(
+                  'No messages yet. Send a message to start chatting with support.',
+                  style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            )
+          else
+            Expanded(
+              child: SingleChildScrollView(
+                reverse: true,
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: _buildChatBubbles(),
                   ),
                 ),
-                _buildStatusBadge(message.status),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text(
-              message.message,
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.grey[600],
               ),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
             ),
-            const SizedBox(height: 8),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              border: Border(
+                top: BorderSide(color: Colors.grey[300]!),
+              ),
+            ),
+            child: Column(
               children: [
-                if (message.createdAt != null)
-                  Text(
-                    DateFormat('dd MMM yyyy').format(message.createdAt!),
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey[500],
-                    ),
-                  ),
-                if (message.hasResponse)
-                  Row(
-                    children: [
-                      Icon(
-                        Icons.reply,
-                        size: 14,
-                        color: Colors.green[700],
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        'Response available',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.green[700],
-                          fontWeight: FontWeight.w600,
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _messageController,
+                        maxLines: null,
+                        maxLength: 500,
+                        onChanged: (value) {
+                          setState(() {});
+                        },
+                        decoration: InputDecoration(
+                          hintText: 'Type a message...',
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
+                          counterText: '',
                         ),
                       ),
-                    ],
+                    ),
+                    const SizedBox(width: 8),
+                    IconButton(
+                      onPressed: (_isSending || _messageController.text.trim().isEmpty) ? null : _sendMessage,
+                      icon: _isSending
+                          ? const SizedBox(
+                              width: 24,
+                              height: 24,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                              ),
+                            )
+                          : const Icon(Icons.send),
+                      color: _primaryColor,
+                    ),
+                  ],
+                ),
+                Align(
+                  alignment: Alignment.bottomRight,
+                  child: Padding(
+                    padding: const EdgeInsets.only(top: 4, right: 8),
+                    child: Text(
+                      '${_messageController.text.length}/500',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: _messageController.text.length > 500
+                            ? Colors.red
+                            : Colors.grey[600],
+                      ),
+                    ),
                   ),
+                ),
               ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

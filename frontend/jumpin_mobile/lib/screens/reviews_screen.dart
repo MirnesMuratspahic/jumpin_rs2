@@ -3,10 +3,11 @@ import 'package:intl/intl.dart';
 import '../models/review.dart';
 import '../providers/review_provider.dart';
 import '../providers/auth_provider.dart';
+import '../utils/error_handler.dart';
 
 class ReviewsScreen extends StatefulWidget {
   final AuthProvider authProvider;
-  final int? targetUserId;
+  final String? targetUserId;
   final String? targetUserName;
 
   const ReviewsScreen({
@@ -39,6 +40,12 @@ class _ReviewsScreenState extends State<ReviewsScreen>
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _loadReviews();
+  }
+
+  @override
   void dispose() {
     _tabController.dispose();
     super.dispose();
@@ -51,14 +58,23 @@ class _ReviewsScreenState extends State<ReviewsScreen>
 
     final userId = widget.authProvider.currentUser?.id;
     if (userId != null) {
-      final received =
-          await _reviewProvider.getReviews(reviewedUserId: userId);
-      final given = await _reviewProvider.getReviews(reviewerId: userId);
-      setState(() {
-        _receivedReviews = received;
-        _givenReviews = given;
-        _isLoading = false;
-      });
+      try {
+        // Fetch received + given reviews in parallel.
+        final results = await Future.wait([
+          _reviewProvider.getReviews(reviewedUserId: userId),
+          _reviewProvider.getReviews(reviewerId: userId),
+        ]);
+        setState(() {
+          _receivedReviews = results[0];
+          _givenReviews = results[1];
+          _isLoading = false;
+        });
+      } catch (e) {
+        setState(() {
+          _isLoading = false;
+        });
+        if (mounted) showApiError(context, e);
+      }
     } else {
       setState(() {
         _isLoading = false;
@@ -156,7 +172,7 @@ class _ReviewsScreenState extends State<ReviewsScreen>
                 if (reviewerId == null) return;
 
                 final reviewedUserId = widget.targetUserId ??
-                    int.tryParse(targetUserIdController.text);
+                    (targetUserIdController.text.isNotEmpty ? targetUserIdController.text : null);
                 if (reviewedUserId == null) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
@@ -167,19 +183,18 @@ class _ReviewsScreenState extends State<ReviewsScreen>
                   return;
                 }
 
-                final success = await _reviewProvider.createReview(
-                  reviewerId: reviewerId,
-                  reviewedUserId: reviewedUserId,
-                  rating: selectedRating,
-                  comment: commentController.text.isNotEmpty
-                      ? commentController.text.trim()
-                      : null,
-                );
+                try {
+                  await _reviewProvider.createReview(
+                    reviewerId: reviewerId,
+                    reviewedUserId: reviewedUserId,
+                    rating: selectedRating,
+                    comment: commentController.text.isNotEmpty
+                        ? commentController.text.trim()
+                        : null,
+                  );
 
-                if (mounted) Navigator.pop(context);
-
-                if (mounted) {
-                  if (success) {
+                  if (mounted) Navigator.pop(context);
+                  if (mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
                         content: Text('Review submitted successfully!'),
@@ -187,14 +202,10 @@ class _ReviewsScreenState extends State<ReviewsScreen>
                       ),
                     );
                     _loadReviews();
-                  } else {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Could not submit review. You may have already reviewed this user or tried to review yourself.'),
-                        backgroundColor: Colors.red,
-                      ),
-                    );
                   }
+                } catch (e) {
+                  if (mounted) Navigator.pop(context);
+                  if (mounted) showApiError(context, e);
                 }
               },
               style: ElevatedButton.styleFrom(
@@ -231,9 +242,9 @@ class _ReviewsScreenState extends State<ReviewsScreen>
 
     if (confirmed != true || review.id == null) return;
 
-    final success = await _reviewProvider.deleteReview(review.id!);
-    if (mounted) {
-      if (success) {
+    try {
+      await _reviewProvider.deleteReview(review.id!);
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Review deleted'),
@@ -241,14 +252,9 @@ class _ReviewsScreenState extends State<ReviewsScreen>
           ),
         );
         _loadReviews();
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Could not delete the review. Please try again later.'),
-            backgroundColor: Colors.red,
-          ),
-        );
       }
+    } catch (e) {
+      if (mounted) showApiError(context, e);
     }
   }
 
@@ -282,13 +288,6 @@ class _ReviewsScreenState extends State<ReviewsScreen>
                 _buildReviewList(_givenReviews, isReceived: false),
               ],
             ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _showWriteReviewDialog,
-        backgroundColor: _primaryColor,
-        foregroundColor: Colors.white,
-        icon: const Icon(Icons.rate_review),
-        label: const Text('Write Review'),
-      ),
     );
   }
 

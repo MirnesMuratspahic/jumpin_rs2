@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/user.dart';
 import '../utils/config.dart';
+import '../utils/app_logger.dart';
 
 class AuthProvider extends ChangeNotifier {
   static String get baseUrl => Config.apiBaseUrl;
@@ -17,14 +18,14 @@ class AuthProvider extends ChangeNotifier {
   String? _lastError;
   String? get lastError => _lastError;
 
-  Future<bool> login(String username, String password) async {
+  Future<bool> login(String email, String password) async {
     try {
       _lastError = null;
       var url = "$baseUrl/User/login";
       var uri = Uri.parse(url);
 
       Map<String, String> headers = {"Content-Type": "application/json"};
-      var body = jsonEncode({"username": username, "password": password});
+      var body = jsonEncode({"email": email, "password": password});
 
       var response = await http.post(uri, headers: headers, body: body);
 
@@ -32,6 +33,8 @@ class AuthProvider extends ChangeNotifier {
         var data = jsonDecode(response.body);
         _currentUser = User.fromJson(data['user']);
         _token = data['token'];
+
+        logDebug('Login successful');
 
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('user', jsonEncode(data['user']));
@@ -57,8 +60,8 @@ class AuthProvider extends ChangeNotifier {
       }
       return false;
     } catch (e) {
-      debugPrint('LOGIN ERROR: $e');
-      _lastError = 'Network error: $e';
+      logError('Login failed', e);
+      _lastError = 'Could not reach the server. Please try again.';
       return false;
     }
   }
@@ -66,7 +69,6 @@ class AuthProvider extends ChangeNotifier {
   Future<bool> register({
     required String firstName,
     required String lastName,
-    required String username,
     required String email,
     required String password,
     required String passwordConfirmation,
@@ -81,22 +83,21 @@ class AuthProvider extends ChangeNotifier {
       var body = jsonEncode({
         "firstName": firstName,
         "lastName": lastName,
-        "username": username,
         "email": email,
         "password": password,
         "passwordConfirmation": passwordConfirmation,
         "phone": phone,
-        "role": 1,
       });
 
       var response = await http.post(uri, headers: headers, body: body);
 
       if (response.statusCode == 200) {
-        return await login(username, password);
+        return await login(email, password);
       } else {
         try {
           var errorData = jsonDecode(response.body);
-          if (errorData['errors'] != null && errorData['errors']['UserError'] != null) {
+          if (errorData['errors'] != null &&
+              errorData['errors']['UserError'] != null) {
             _lastError = errorData['errors']['UserError'][0];
           } else if (errorData['message'] != null) {
             _lastError = errorData['message'];
@@ -109,17 +110,16 @@ class AuthProvider extends ChangeNotifier {
       }
       return false;
     } catch (e) {
-      debugPrint('REGISTER ERROR: $e');
-      _lastError = 'Network error: $e';
+      logError('Register failed', e);
+      _lastError = 'Could not reach the server. Please try again.';
       return false;
     }
   }
 
   Future<bool> updateProfile({
-    required int userId,
+    required String userId,
     String? firstName,
     String? lastName,
-    String? username,
     String? email,
     String? phone,
   }) async {
@@ -130,7 +130,6 @@ class AuthProvider extends ChangeNotifier {
       var body = jsonEncode({
         "firstName": firstName,
         "lastName": lastName,
-        "username": username,
         "email": email,
         "phone": phone,
       });
@@ -191,7 +190,80 @@ class AuthProvider extends ChangeNotifier {
       }
       return null;
     } catch (e) {
-      debugPrint('CHECKOUT ERROR: $e');
+      logError('Create checkout session failed', e);
+      return null;
+    }
+  }
+
+  /// Starts an in-app subscription: returns the PaymentIntent client secret +
+  /// publishable key for the Stripe PaymentSheet.
+  Future<Map<String, dynamic>?> createSubscription() async {
+    try {
+      if (_currentUser == null) return null;
+      final response = await http.post(
+        Uri.parse("$baseUrl/Payment/create-subscription/${_currentUser!.id}"),
+        headers: authHeaders,
+      );
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body) as Map<String, dynamic>;
+      }
+      return null;
+    } catch (e) {
+      logError('Create subscription failed', e);
+      return null;
+    }
+  }
+
+  /// Confirms the subscription server-side after the PaymentSheet succeeds.
+  Future<bool> confirmSubscription() async {
+    try {
+      if (_currentUser == null) return false;
+      final response = await http.post(
+        Uri.parse("$baseUrl/Payment/confirm-subscription/${_currentUser!.id}"),
+        headers: authHeaders,
+      );
+      if (response.statusCode == 200) {
+        await refreshUser();
+        return true;
+      }
+      return false;
+    } catch (e) {
+      logError('Confirm subscription failed', e);
+      return false;
+    }
+  }
+
+  /// Cancels at period end: VIP stays until it expires, then does not renew.
+  Future<bool> cancelSubscription() async {
+    try {
+      if (_currentUser == null) return false;
+      final response = await http.post(
+        Uri.parse("$baseUrl/Payment/cancel-subscription/${_currentUser!.id}"),
+        headers: authHeaders,
+      );
+      if (response.statusCode == 200) {
+        await refreshUser();
+        return true;
+      }
+      return false;
+    } catch (e) {
+      logError('Cancel subscription failed', e);
+      return false;
+    }
+  }
+
+  Future<Map<String, dynamic>?> getSubscriptionStatus() async {
+    try {
+      if (_currentUser == null) return null;
+      final response = await http.get(
+        Uri.parse("$baseUrl/Payment/status/${_currentUser!.id}"),
+        headers: authHeaders,
+      );
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body) as Map<String, dynamic>;
+      }
+      return null;
+    } catch (e) {
       return null;
     }
   }
@@ -208,17 +280,75 @@ class AuthProvider extends ChangeNotifier {
         var data = jsonDecode(response.body);
         _currentUser = User.fromJson(data);
 
+        logDebug('Refreshed current user');
+
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('user', jsonEncode(data));
 
         notifyListeners();
       }
     } catch (e) {
-      debugPrint('REFRESH USER ERROR: $e');
+      logError('Refresh user failed', e);
+    }
+  }
+
+  /// Requests a password-reset code be emailed. Always reports success (the
+  /// backend never reveals whether the email exists).
+  Future<void> requestPasswordReset(String email) async {
+    try {
+      await http.post(
+        Uri.parse("$baseUrl/User/forgot-password"),
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode({"email": email}),
+      );
+    } catch (e) {
+      logError('Request password reset failed', e);
+    }
+  }
+
+  /// Resets the password using the emailed code. Returns null on success or an
+  /// error message.
+  Future<String?> resetPassword(
+      String email, String code, String newPassword, String confirmNewPassword) async {
+    try {
+      final response = await http.post(
+        Uri.parse("$baseUrl/User/reset-password"),
+        headers: {"Content-Type": "application/json"},
+        body: jsonEncode({
+          "email": email,
+          "code": code,
+          "newPassword": newPassword,
+          "confirmNewPassword": confirmNewPassword,
+        }),
+      );
+
+      if (response.statusCode == 200) return null;
+
+      try {
+        final data = jsonDecode(response.body);
+        if (data['errors']?['UserError'] != null) {
+          return data['errors']['UserError'][0];
+        }
+        return data['message'] ?? 'Could not reset password.';
+      } catch (_) {
+        return 'Could not reset password.';
+      }
+    } catch (e) {
+      logError('Reset password failed', e);
+      return 'Could not reach the server. Please try again.';
     }
   }
 
   Future<void> logout() async {
+    // Invalidate the token server-side (best-effort), then clear local state.
+    try {
+      if (_token != null && _currentUser != null) {
+        await http.post(Uri.parse("$baseUrl/User/logout"), headers: authHeaders);
+      }
+    } catch (e) {
+      logError('Server logout failed', e);
+    }
+
     _currentUser = null;
     _token = null;
 
@@ -227,6 +357,46 @@ class AuthProvider extends ChangeNotifier {
     await prefs.remove('token');
 
     notifyListeners();
+  }
+
+  /// Changes the current user's password. Returns null on success, or an error
+  /// message. On success it re-authenticates to get a fresh token (the old one
+  /// is invalidated server-side when the password changes).
+  Future<String?> changePassword(
+      String currentPassword, String newPassword, String confirmNewPassword) async {
+    try {
+      if (_currentUser == null) return 'You are not logged in.';
+      final email = _currentUser!.email ?? '';
+
+      final response = await http.post(
+        Uri.parse("$baseUrl/User/${_currentUser!.id}/change-password"),
+        headers: authHeaders,
+        body: jsonEncode({
+          'currentPassword': currentPassword,
+          'newPassword': newPassword,
+          'confirmNewPassword': confirmNewPassword,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        // The current token is now revoked; refresh it transparently.
+        await login(email, newPassword);
+        return null;
+      }
+
+      try {
+        final data = jsonDecode(response.body);
+        if (data['errors']?['UserError'] != null) {
+          return data['errors']['UserError'][0];
+        }
+        return data['message'] ?? 'Could not change password.';
+      } catch (_) {
+        return 'Could not change password.';
+      }
+    } catch (e) {
+      logError('Change password failed', e);
+      return 'Could not reach the server. Please try again.';
+    }
   }
 
   Future<bool> tryAutoLogin() async {

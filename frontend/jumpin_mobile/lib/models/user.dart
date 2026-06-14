@@ -1,8 +1,7 @@
 class User {
-  final int id;
+  final String id;
   final String? firstName;
   final String? lastName;
-  final String username;
   final String? email;
   final String? phone;
   final String? profileImageUrl;
@@ -14,6 +13,7 @@ class User {
   final bool isVip;
   final DateTime? vipActivatedAt;
   final DateTime? vipExpiresAt;
+  final bool vipCancelAtPeriodEnd;
   final double? averageRating;
   final int? totalReviews;
   final int? totalAds;
@@ -22,7 +22,6 @@ class User {
     required this.id,
     this.firstName,
     this.lastName,
-    required this.username,
     this.email,
     this.phone,
     this.profileImageUrl,
@@ -34,6 +33,7 @@ class User {
     this.isVip = false,
     this.vipActivatedAt,
     this.vipExpiresAt,
+    this.vipCancelAtPeriodEnd = false,
     this.averageRating,
     this.totalReviews,
     this.totalAds,
@@ -41,10 +41,9 @@ class User {
 
   factory User.fromJson(Map<String, dynamic> json) {
     return User(
-      id: json['id'],
+      id: json['id'].toString(),
       firstName: json['firstName'],
       lastName: json['lastName'],
-      username: json['username'] ?? '',
       email: json['email'],
       phone: json['phone'] ?? json['phoneNumber'],
       profileImageUrl: json['profileImageUrl'],
@@ -64,6 +63,7 @@ class User {
       vipExpiresAt: json['vipExpiresAt'] != null
           ? DateTime.parse(json['vipExpiresAt'])
           : null,
+      vipCancelAtPeriodEnd: json['vipCancelAtPeriodEnd'] ?? false,
       averageRating: json['averageRating']?.toDouble(),
       totalReviews: json['totalReviews'],
       totalAds: json['totalAds'],
@@ -75,7 +75,6 @@ class User {
       'id': id,
       'firstName': firstName,
       'lastName': lastName,
-      'username': username,
       'email': email,
       'phone': phone,
       'profileImageUrl': profileImageUrl,
@@ -87,6 +86,7 @@ class User {
       'isVip': isVip,
       'vipActivatedAt': vipActivatedAt?.toIso8601String(),
       'vipExpiresAt': vipExpiresAt?.toIso8601String(),
+      'vipCancelAtPeriodEnd': vipCancelAtPeriodEnd,
       'averageRating': averageRating,
       'totalReviews': totalReviews,
       'totalAds': totalAds,
@@ -97,6 +97,13 @@ class User {
     if (firstName != null && lastName != null) {
       return '$firstName $lastName';
     }
-    return username;
+    return email ?? 'User';
+  }
+
+  String? get fullProfileImageUrl {
+    if (profileImageUrl == null) return null;
+    if (profileImageUrl!.startsWith('http')) return profileImageUrl;
+    // Convert relative path to full URL
+    return 'http://192.168.0.4:5194${profileImageUrl!}';
   }
 }

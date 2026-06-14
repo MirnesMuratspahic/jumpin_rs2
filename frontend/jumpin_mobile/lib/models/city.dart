@@ -1,5 +1,5 @@
 class City {
-  final int id;
+  final String id;
   final String name;
   final double latitude;
   final double longitude;
@@ -13,7 +13,7 @@ class City {
 
   factory City.fromJson(Map<String, dynamic> json) {
     return City(
-      id: json['id'] as int,
+      id: json['id'] as String,
       name: json['name'] as String,
       latitude: (json['latitude'] as num).toDouble(),
       longitude: (json['longitude'] as num).toDouble(),

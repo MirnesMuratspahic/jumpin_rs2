@@ -8,6 +8,8 @@ import '../models/city.dart';
 import '../providers/auth_provider.dart';
 import '../providers/ad_provider.dart';
 import '../providers/city_provider.dart';
+import '../utils/app_logger.dart';
+import '../utils/error_handler.dart';
 import 'route_map_picker.dart';
 import 'location_picker.dart';
 
@@ -46,12 +48,16 @@ class _AddAdScreenState extends State<AddAdScreen> {
   }
 
   Future<void> _loadCities() async {
-    final cities = await _cityProvider.getCities();
-    setState(() {
-      _cities = cities;
-    });
-    if (_isEditMode) {
-      _populateEditForm(cities);
+    try {
+      final cities = await _cityProvider.getCities();
+      setState(() {
+        _cities = cities;
+      });
+      if (_isEditMode) {
+        _populateEditForm(cities);
+      }
+    } catch (e) {
+      if (mounted) showApiError(context, e);
     }
   }
 
@@ -80,9 +86,9 @@ class _AddAdScreenState extends State<AddAdScreen> {
         _carSeatsController.text = ad.carSeats?.toString() ?? '';
         _selectedFuelType = ad.fuelType;
         _selectedCity = cities.cast<City?>().firstWhere(
-          (c) => c!.name == ad.location,
-          orElse: () => null,
-        );
+              (c) => c!.name == ad.location,
+              orElse: () => null,
+            );
         break;
       case 'apartment':
       case 'apartmentrental':
@@ -91,21 +97,21 @@ class _AddAdScreenState extends State<AddAdScreen> {
         _apartmentRoomsController.text = ad.apartmentRooms?.toString() ?? '';
         _apartmentAreaController.text = ad.apartmentArea?.toString() ?? '';
         _selectedCity = cities.cast<City?>().firstWhere(
-          (c) => c!.name == ad.location,
-          orElse: () => null,
-        );
+              (c) => c!.name == ad.location,
+              orElse: () => null,
+            );
         break;
       default:
         _selectedAdType = 'Route';
         _routeCoordinatesJson = ad.routeCoordinates;
         _selectedFromCity = cities.cast<City?>().firstWhere(
-          (c) => c!.name == ad.locationFrom,
-          orElse: () => null,
-        );
+              (c) => c!.name == ad.locationFrom,
+              orElse: () => null,
+            );
         _selectedToCity = cities.cast<City?>().firstWhere(
-          (c) => c!.name == ad.locationTo,
-          orElse: () => null,
-        );
+              (c) => c!.name == ad.locationTo,
+              orElse: () => null,
+            );
     }
 
     if (ad.latitude != null && ad.longitude != null) {
@@ -140,7 +146,13 @@ class _AddAdScreenState extends State<AddAdScreen> {
   final _apartmentRoomsController = TextEditingController();
   final _apartmentAreaController = TextEditingController();
 
-  final List<String> _fuelTypes = ['Petrol', 'Diesel', 'Electric', 'Hybrid', 'LPG'];
+  final List<String> _fuelTypes = [
+    'Petrol',
+    'Diesel',
+    'Electric',
+    'Hybrid',
+    'LPG'
+  ];
 
   // Shared location (car/apartment)
   double? _pickedLatitude;
@@ -290,138 +302,265 @@ class _AddAdScreenState extends State<AddAdScreen> {
       longitude = _selectedCity!.longitude;
     }
 
-    bool success;
-    if (_isEditMode) {
-      success = await _adProvider.updateAd(
-        id: widget.editAd!.id,
-        title: _titleController.text.trim(),
-        description: _descriptionController.text.trim(),
-        adType: adType,
-        price: double.tryParse(_priceController.text) ?? 0,
-        dateAvailable: _dateAvailableController.text.isNotEmpty
-            ? _dateAvailableController.text
-            : null,
-        timeAvailable: _timeAvailableController.text.isNotEmpty
-            ? _timeAvailableController.text
-            : null,
-        locationFrom: _selectedAdType == 'Route' ? _selectedFromCity?.name : null,
-        locationTo: _selectedAdType == 'Route' ? _selectedToCity?.name : null,
-        location: (_selectedAdType == 'Car' || _selectedAdType == 'Apartment')
-            ? _selectedCity?.name
-            : null,
-        latitude: latitude,
-        longitude: longitude,
-        latitudeEnd: latitudeEnd,
-        longitudeEnd: longitudeEnd,
-        routeCoordinates: _selectedAdType == 'Route' ? _routeCoordinatesJson : null,
-        carBrand: _selectedAdType == 'Car' ? _carBrandController.text.trim() : null,
-        carModel: _selectedAdType == 'Car' ? _carModelController.text.trim() : null,
-        carYear: _selectedAdType == 'Car' ? int.tryParse(_carYearController.text) : null,
-        carSeats: _selectedAdType == 'Car' ? int.tryParse(_carSeatsController.text) : null,
-        fuelType: _selectedAdType == 'Car' ? _selectedFuelType : null,
-        apartmentAddress: _selectedAdType == 'Apartment'
-            ? _apartmentAddressController.text.trim()
-            : null,
-        apartmentRooms: _selectedAdType == 'Apartment'
-            ? int.tryParse(_apartmentRoomsController.text)
-            : null,
-        apartmentArea: _selectedAdType == 'Apartment'
-            ? double.tryParse(_apartmentAreaController.text)
-            : null,
-        imageUrl: _uploadedImageUrls.isNotEmpty ? _uploadedImageUrls.first
-            : (_existingImages.isNotEmpty ? _existingImages.first.imageUrl : _uploadedImageUrl),
-      );
+    try {
+      if (_isEditMode) {
+        await _adProvider.updateAd(
+          id: widget.editAd!.id,
+          title: _titleController.text.trim(),
+          description: _descriptionController.text.trim(),
+          adType: adType,
+          price: double.tryParse(_priceController.text) ?? 0,
+          dateAvailable: _dateAvailableController.text.isNotEmpty
+              ? _dateAvailableController.text
+              : null,
+          timeAvailable: _timeAvailableController.text.isNotEmpty
+              ? _timeAvailableController.text
+              : null,
+          locationFrom:
+              _selectedAdType == 'Route' ? _selectedFromCity?.name : null,
+          locationTo: _selectedAdType == 'Route' ? _selectedToCity?.name : null,
+          location: (_selectedAdType == 'Car' || _selectedAdType == 'Apartment')
+              ? _selectedCity?.name
+              : null,
+          latitude: latitude,
+          longitude: longitude,
+          latitudeEnd: latitudeEnd,
+          longitudeEnd: longitudeEnd,
+          routeCoordinates:
+              _selectedAdType == 'Route' ? _routeCoordinatesJson : null,
+          carBrand:
+              _selectedAdType == 'Car' ? _carBrandController.text.trim() : null,
+          carModel:
+              _selectedAdType == 'Car' ? _carModelController.text.trim() : null,
+          carYear: _selectedAdType == 'Car'
+              ? int.tryParse(_carYearController.text)
+              : null,
+          carSeats: _selectedAdType == 'Car'
+              ? int.tryParse(_carSeatsController.text)
+              : null,
+          fuelType: _selectedAdType == 'Car' ? _selectedFuelType : null,
+          apartmentAddress: _selectedAdType == 'Apartment'
+              ? _apartmentAddressController.text.trim()
+              : null,
+          apartmentRooms: _selectedAdType == 'Apartment'
+              ? int.tryParse(_apartmentRoomsController.text)
+              : null,
+          apartmentArea: _selectedAdType == 'Apartment'
+              ? double.tryParse(_apartmentAreaController.text)
+              : null,
+          imageUrl: _uploadedImageUrls.isNotEmpty
+              ? _uploadedImageUrls.first
+              : (_existingImages.isNotEmpty
+                  ? _existingImages.first.imageUrl
+                  : _uploadedImageUrl),
+        );
 
-      // Create AdImage records for newly uploaded images in edit mode
-      if (success && _uploadedImageUrls.isNotEmpty) {
-        final startOrder = _existingImages.length;
-        final isMainNeeded = _existingImages.isEmpty;
-        for (int i = 0; i < _uploadedImageUrls.length; i++) {
-          await _adProvider.createAdImage(
-            adId: widget.editAd!.id,
-            imageUrl: _uploadedImageUrls[i],
-            isMainImage: isMainNeeded && i == 0,
-            displayOrder: startOrder + i,
-          );
+        // Create AdImage records for newly uploaded images in edit mode
+        if (_uploadedImageUrls.isNotEmpty) {
+          final startOrder = _existingImages.length;
+          final isMainNeeded = _existingImages.isEmpty;
+          for (int i = 0; i < _uploadedImageUrls.length; i++) {
+            await _adProvider.createAdImage(
+              adId: widget.editAd!.id,
+              imageUrl: _uploadedImageUrls[i],
+              isMainImage: isMainNeeded && i == 0,
+              displayOrder: startOrder + i,
+            );
+          }
+        }
+      } else {
+        final result = await _adProvider.createAd(
+          title: _titleController.text.trim(),
+          description: _descriptionController.text.trim(),
+          adType: adType,
+          price: double.tryParse(_priceController.text) ?? 0,
+          userId: userId,
+          dateAvailable: _dateAvailableController.text.isNotEmpty
+              ? _dateAvailableController.text
+              : null,
+          timeAvailable: _timeAvailableController.text.isNotEmpty
+              ? _timeAvailableController.text
+              : null,
+          locationFrom:
+              _selectedAdType == 'Route' ? _selectedFromCity?.name : null,
+          locationTo: _selectedAdType == 'Route' ? _selectedToCity?.name : null,
+          location: (_selectedAdType == 'Car' || _selectedAdType == 'Apartment')
+              ? _selectedCity?.name
+              : null,
+          latitude: latitude,
+          longitude: longitude,
+          latitudeEnd: latitudeEnd,
+          longitudeEnd: longitudeEnd,
+          routeCoordinates:
+              _selectedAdType == 'Route' ? _routeCoordinatesJson : null,
+          carBrand:
+              _selectedAdType == 'Car' ? _carBrandController.text.trim() : null,
+          carModel:
+              _selectedAdType == 'Car' ? _carModelController.text.trim() : null,
+          carYear: _selectedAdType == 'Car'
+              ? int.tryParse(_carYearController.text)
+              : null,
+          carSeats: _selectedAdType == 'Car'
+              ? int.tryParse(_carSeatsController.text)
+              : null,
+          fuelType: _selectedAdType == 'Car' ? _selectedFuelType : null,
+          apartmentAddress: _selectedAdType == 'Apartment'
+              ? _apartmentAddressController.text.trim()
+              : null,
+          apartmentRooms: _selectedAdType == 'Apartment'
+              ? int.tryParse(_apartmentRoomsController.text)
+              : null,
+          apartmentArea: _selectedAdType == 'Apartment'
+              ? double.tryParse(_apartmentAreaController.text)
+              : null,
+          imageUrl: _uploadedImageUrls.isNotEmpty
+              ? _uploadedImageUrls.first
+              : _uploadedImageUrl,
+        );
+
+        // Create AdImage records for each uploaded image
+        if (result != null && _uploadedImageUrls.isNotEmpty) {
+          for (int i = 0; i < _uploadedImageUrls.length; i++) {
+            await _adProvider.createAdImage(
+              adId: result.id,
+              imageUrl: _uploadedImageUrls[i],
+              isMainImage: i == 0,
+              displayOrder: i,
+            );
+          }
         }
       }
-    } else {
-      final result = await _adProvider.createAd(
-        title: _titleController.text.trim(),
-        description: _descriptionController.text.trim(),
-        adType: adType,
-        price: double.tryParse(_priceController.text) ?? 0,
-        userId: userId,
-        dateAvailable: _dateAvailableController.text.isNotEmpty
-            ? _dateAvailableController.text
-            : null,
-        timeAvailable: _timeAvailableController.text.isNotEmpty
-            ? _timeAvailableController.text
-            : null,
-        locationFrom: _selectedAdType == 'Route' ? _selectedFromCity?.name : null,
-        locationTo: _selectedAdType == 'Route' ? _selectedToCity?.name : null,
-        location: (_selectedAdType == 'Car' || _selectedAdType == 'Apartment')
-            ? _selectedCity?.name
-            : null,
-        latitude: latitude,
-        longitude: longitude,
-        latitudeEnd: latitudeEnd,
-        longitudeEnd: longitudeEnd,
-        routeCoordinates: _selectedAdType == 'Route' ? _routeCoordinatesJson : null,
-        carBrand: _selectedAdType == 'Car' ? _carBrandController.text.trim() : null,
-        carModel: _selectedAdType == 'Car' ? _carModelController.text.trim() : null,
-        carYear: _selectedAdType == 'Car' ? int.tryParse(_carYearController.text) : null,
-        carSeats: _selectedAdType == 'Car' ? int.tryParse(_carSeatsController.text) : null,
-        fuelType: _selectedAdType == 'Car' ? _selectedFuelType : null,
-        apartmentAddress: _selectedAdType == 'Apartment'
-            ? _apartmentAddressController.text.trim()
-            : null,
-        apartmentRooms: _selectedAdType == 'Apartment'
-            ? int.tryParse(_apartmentRoomsController.text)
-            : null,
-        apartmentArea: _selectedAdType == 'Apartment'
-            ? double.tryParse(_apartmentAreaController.text)
-            : null,
-        imageUrl: _uploadedImageUrls.isNotEmpty ? _uploadedImageUrls.first : _uploadedImageUrl,
-      );
-      success = result != null;
 
-      // Create AdImage records for each uploaded image
-      if (result != null && _uploadedImageUrls.isNotEmpty) {
-        for (int i = 0; i < _uploadedImageUrls.length; i++) {
-          await _adProvider.createAdImage(
-            adId: result.id,
-            imageUrl: _uploadedImageUrls[i],
-            isMainImage: i == 0,
-            displayOrder: i,
-          );
-        }
-      }
-    }
-
-    setState(() {
-      _isLoading = false;
-    });
-
-    if (mounted) {
-      if (success) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(_isEditMode ? 'Ad updated successfully!' : 'Ad created successfully!'),
+            content: Text(_isEditMode
+                ? 'Ad updated successfully!'
+                : 'Ad created successfully!'),
             backgroundColor: Colors.green,
           ),
         );
         if (!_isEditMode) _resetForm();
         Navigator.pop(context, true);
-      } else {
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+        showApiError(context, e);
+      }
+    }
+  }
+
+  Future<void> _endAd() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('End Ad'),
+        content: const Text(
+            'Are you sure you want to end this ad? It will no longer be visible to others.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.orange,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('End Ad'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      await _adProvider.endAd(widget.editAd!.id);
+
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(_isEditMode
-                ? 'Could not update the ad. Please try again.'
-                : 'Could not create the ad. Please check all required fields and try again.'),
-            backgroundColor: Colors.red,
+          const SnackBar(
+            content: Text('Ad ended successfully'),
+            backgroundColor: Colors.green,
           ),
         );
+        Navigator.pop(context, true);
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+        showApiError(context, e);
+      }
+    }
+  }
+
+  Future<void> _deleteAd() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Ad'),
+        content: const Text(
+            'Are you sure you want to delete this ad? This action cannot be undone.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      await _adProvider.deleteAd(widget.editAd!.id);
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Ad deleted successfully'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        Navigator.pop(context, true);
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+        showApiError(context, e);
       }
     }
   }
@@ -444,6 +583,35 @@ class _AddAdScreenState extends State<AddAdScreen> {
       initialTime: TimeOfDay.now(),
     );
     if (time != null) {
+      // Check if selected date is today
+      final selectedDate = _dateAvailableController.text.isNotEmpty
+          ? DateTime.parse(_dateAvailableController.text)
+          : null;
+      final now = DateTime.now();
+      final today = DateTime(now.year, now.month, now.day);
+      final isToday = selectedDate != null
+          ? DateTime(selectedDate.year, selectedDate.month, selectedDate.day)
+                  .compareTo(today) ==
+              0
+          : true;
+
+      // If today is selected, prevent selecting past times
+      if (isToday) {
+        final selectedTime = time.hour * 60 + time.minute;
+        final currentTime = now.hour * 60 + now.minute;
+        if (selectedTime < currentTime) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('You can only select future times'),
+                backgroundColor: Colors.orange,
+              ),
+            );
+          }
+          return;
+        }
+      }
+
       _timeAvailableController.text =
           '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
     }
@@ -478,9 +646,11 @@ class _AddAdScreenState extends State<AddAdScreen> {
                 children: [
                   _buildTypeButton('Route', Icons.route, Colors.blue[700]!),
                   const SizedBox(width: 8),
-                  _buildTypeButton('Car', Icons.directions_car, Colors.orange[700]!),
+                  _buildTypeButton(
+                      'Car', Icons.directions_car, Colors.orange[700]!),
                   const SizedBox(width: 8),
-                  _buildTypeButton('Apartment', Icons.apartment, Colors.green[700]!),
+                  _buildTypeButton(
+                      'Apartment', Icons.apartment, Colors.green[700]!),
                 ],
               ),
               const SizedBox(height: 24),
@@ -616,6 +786,48 @@ class _AddAdScreenState extends State<AddAdScreen> {
                         ),
                       ),
               ),
+              const SizedBox(height: 12),
+              if (_isEditMode) ...[
+                if ((widget.editAd?.status ?? 'Active').toLowerCase() !=
+                    'ended')
+                  ElevatedButton(
+                    onPressed: _isLoading ? null : _endAd,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.orange,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: const Text(
+                      'End Ad',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                const SizedBox(height: 12),
+                ElevatedButton(
+                  onPressed: _isLoading ? null : _deleteAd,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.red,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: const Text(
+                    'Delete Ad',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
               const SizedBox(height: 20),
             ],
           ),
@@ -743,7 +955,9 @@ class _AddAdScreenState extends State<AddAdScreen> {
   Future<void> _pickImage() async {
     if (_totalImageCount >= 5) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Maximum 5 images allowed'), backgroundColor: Colors.orange),
+        const SnackBar(
+            content: Text('Maximum 5 images allowed'),
+            backgroundColor: Colors.orange),
       );
       return;
     }
@@ -770,7 +984,8 @@ class _AddAdScreenState extends State<AddAdScreen> {
 
     if (source == null) return;
 
-    final picked = await _imagePicker.pickImage(source: source, maxWidth: 1200, imageQuality: 85);
+    final picked = await _imagePicker.pickImage(
+        source: source, maxWidth: 1200, imageQuality: 85);
     if (picked == null) return;
 
     final file = File(picked.path);
@@ -791,14 +1006,18 @@ class _AddAdScreenState extends State<AddAdScreen> {
           _uploadedImageUrls.add(imageUrl);
         });
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Image uploaded!'), backgroundColor: Colors.green),
+          const SnackBar(
+              content: Text('Image uploaded!'), backgroundColor: Colors.green),
         );
       } else {
         setState(() {
           _selectedImages.remove(file);
         });
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not upload the image. Ensure it is JPG, PNG or WEBP and under 10MB.'), backgroundColor: Colors.red),
+          const SnackBar(
+              content: Text(
+                  'Could not upload the image. Ensure it is JPG, PNG or WEBP and under 10MB.'),
+              backgroundColor: Colors.red),
         );
       }
     }
@@ -818,7 +1037,8 @@ class _AddAdScreenState extends State<AddAdScreen> {
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+            style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red, foregroundColor: Colors.white),
             child: const Text('Delete'),
           ),
         ],
@@ -827,22 +1047,19 @@ class _AddAdScreenState extends State<AddAdScreen> {
 
     if (confirmed != true) return;
 
-    final success = await _adProvider.deleteAdImage(image.id);
-    if (success) {
+    try {
+      await _adProvider.deleteAdImage(image.id);
       setState(() {
         _existingImages.removeAt(index);
       });
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Image deleted'), backgroundColor: Colors.green),
+          const SnackBar(
+              content: Text('Image deleted'), backgroundColor: Colors.green),
         );
       }
-    } else {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Failed to delete image'), backgroundColor: Colors.red),
-        );
-      }
+    } catch (e) {
+      if (mounted) showApiError(context, e);
     }
   }
 
@@ -856,7 +1073,8 @@ class _AddAdScreenState extends State<AddAdScreen> {
   }
 
   Widget _buildImagePicker() {
-    final hasAnyImages = _existingImages.isNotEmpty || _selectedImages.isNotEmpty;
+    final hasAnyImages =
+        _existingImages.isNotEmpty || _selectedImages.isNotEmpty;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -888,7 +1106,8 @@ class _AddAdScreenState extends State<AddAdScreen> {
                                   height: 120,
                                   width: 120,
                                   color: Colors.grey[300],
-                                  child: const Icon(Icons.broken_image, color: Colors.grey),
+                                  child: const Icon(Icons.broken_image,
+                                      color: Colors.grey),
                                 ),
                               )
                             : Image.file(
@@ -911,21 +1130,28 @@ class _AddAdScreenState extends State<AddAdScreen> {
                               color: Colors.red,
                               shape: BoxShape.circle,
                             ),
-                            child: const Icon(Icons.close, size: 16, color: Colors.white),
+                            child: const Icon(Icons.close,
+                                size: 16, color: Colors.white),
                           ),
                         ),
                       ),
-                      if (isFirst && (isExisting ? _existingImages[0].isMainImage : true))
+                      if (isFirst &&
+                          (isExisting ? _existingImages[0].isMainImage : true))
                         Positioned(
                           bottom: 4,
                           left: 4,
                           child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 6, vertical: 2),
                             decoration: BoxDecoration(
                               color: _primaryColor,
                               borderRadius: BorderRadius.circular(6),
                             ),
-                            child: const Text('Main', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
+                            child: const Text('Main',
+                                style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold)),
                           ),
                         ),
                     ],
@@ -945,7 +1171,8 @@ class _AddAdScreenState extends State<AddAdScreen> {
                   ? const SizedBox(
                       width: 18,
                       height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: Colors.white),
                     )
                   : const Icon(Icons.add_a_photo),
               label: Text(_isUploadingImage

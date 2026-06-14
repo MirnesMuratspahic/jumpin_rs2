@@ -1,13 +1,15 @@
 class Request {
-  final int id;
+  final String id;
   final String? requestNumber;
-  final int senderId;
+  final String senderId;
   final String? senderName;
   final String? senderEmail;
+  final String? senderPhone;
   final String? senderProfileImage;
-  final int receiverId;
+  final String receiverId;
   final String? receiverName;
-  final int adId;
+  final String? receiverPhone;
+  final String adId;
   final String? adTitle;
   final String? adType;
   final String status;
@@ -21,9 +23,11 @@ class Request {
     required this.senderId,
     this.senderName,
     this.senderEmail,
+    this.senderPhone,
     this.senderProfileImage,
     required this.receiverId,
     this.receiverName,
+    this.receiverPhone,
     required this.adId,
     this.adTitle,
     this.adType,
@@ -67,15 +71,17 @@ class Request {
     }
 
     return Request(
-      id: json['id'],
+      id: json['id'].toString(),
       requestNumber: json['requestNumber'],
-      senderId: json['senderId'] ?? 0,
+      senderId: (json['senderId'] ?? '').toString(),
       senderName: json['senderName'],
       senderEmail: json['senderEmail'],
+      senderPhone: json['senderPhone'],
       senderProfileImage: json['senderProfileImage'],
-      receiverId: json['receiverId'] ?? 0,
+      receiverId: (json['receiverId'] ?? '').toString(),
       receiverName: json['receiverName'],
-      adId: json['adId'] ?? 0,
+      receiverPhone: json['receiverPhone'],
+      adId: (json['adId'] ?? '').toString(),
       adTitle: json['adTitle'],
       adType: json['adType'],
       status: mapStatus(json['status']),
@@ -96,9 +102,11 @@ class Request {
       'senderId': senderId,
       'senderName': senderName,
       'senderEmail': senderEmail,
+      'senderPhone': senderPhone,
       'senderProfileImage': senderProfileImage,
       'receiverId': receiverId,
       'receiverName': receiverName,
+      'receiverPhone': receiverPhone,
       'adId': adId,
       'adTitle': adTitle,
       'adType': adType,

@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../models/request.dart';
 import '../utils/config.dart';
+import '../utils/api_exception.dart';
 
 class RequestProvider {
   static String get baseUrl => Config.apiBaseUrl;
@@ -17,7 +18,8 @@ class RequestProvider {
         if (_token != null) "Authorization": "Bearer $_token",
       };
 
-  Future<List<Request>> getRequests({int? senderId, int? receiverId}) async {
+  Future<List<Request>> getRequests(
+      {String? senderId, String? receiverId}) async {
     try {
       var url = "$baseUrl/Request";
       final queryParams = <String>[];
@@ -52,15 +54,17 @@ class RequestProvider {
 
         return requestList.map((json) => Request.fromJson(json)).toList();
       }
-      return [];
+      throw ApiException.fromResponse(response);
+    } on ApiException {
+      rethrow;
     } catch (e) {
-      return [];
+      throw ApiException.network(e);
     }
   }
 
   Future<bool> sendRequest({
-    required int senderId,
-    required int adId,
+    required String senderId,
+    required String adId,
     String? message,
   }) async {
     try {
@@ -75,35 +79,44 @@ class RequestProvider {
 
       var response = await http.post(uri, headers: _headers, body: body);
 
-      return response.statusCode == 200;
+      if (response.statusCode == 200) return true;
+      throw ApiException.fromResponse(response);
+    } on ApiException {
+      rethrow;
     } catch (e) {
-      return false;
+      throw ApiException.network(e);
     }
   }
 
-  Future<bool> acceptRequest(int id) async {
+  Future<bool> acceptRequest(String id) async {
     try {
       var url = "$baseUrl/Request/$id/accept";
       var uri = Uri.parse(url);
 
-      var response = await http.put(uri, headers: _headers);
+      var response = await http.post(uri, headers: _headers);
 
-      return response.statusCode == 200;
+      if (response.statusCode == 200) return true;
+      throw ApiException.fromResponse(response);
+    } on ApiException {
+      rethrow;
     } catch (e) {
-      return false;
+      throw ApiException.network(e);
     }
   }
 
-  Future<bool> declineRequest(int id) async {
+  Future<bool> declineRequest(String id) async {
     try {
       var url = "$baseUrl/Request/$id/decline";
       var uri = Uri.parse(url);
 
-      var response = await http.put(uri, headers: _headers);
+      var response = await http.post(uri, headers: _headers);
 
-      return response.statusCode == 200;
+      if (response.statusCode == 200) return true;
+      throw ApiException.fromResponse(response);
+    } on ApiException {
+      rethrow;
     } catch (e) {
-      return false;
+      throw ApiException.network(e);
     }
   }
 }

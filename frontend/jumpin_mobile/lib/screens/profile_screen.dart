@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
-import '../models/ad.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:flutter_stripe/flutter_stripe.dart';
 import '../models/review.dart';
 import '../providers/auth_provider.dart';
-import '../providers/ad_provider.dart';
 import '../providers/review_provider.dart';
+import '../providers/user_provider.dart';
+import '../utils/app_logger.dart';
+import '../utils/error_handler.dart';
 import 'login_screen.dart';
 import 'reviews_screen.dart';
-import 'ad_details_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   final AuthProvider authProvider;
@@ -19,9 +20,8 @@ class ProfileScreen extends StatefulWidget {
 }
 
 class _ProfileScreenState extends State<ProfileScreen> {
-  final _adProvider = AdProvider();
   final _reviewProvider = ReviewProvider();
-  List<Ad> _myAds = [];
+  final _userProvider = UserProvider();
   List<Review> _myReviews = [];
   bool _isLoading = true;
 
@@ -30,8 +30,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   void initState() {
     super.initState();
-    _adProvider.setToken(widget.authProvider.token);
     _reviewProvider.setToken(widget.authProvider.token);
+    _userProvider.setToken(widget.authProvider.token);
     _loadData();
     WidgetsBinding.instance.addObserver(_lifecycleObserver = _LifecycleObserver(_onResumed));
   }
@@ -56,13 +56,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     final userId = widget.authProvider.currentUser?.id;
     if (userId != null) {
-      final ads = await _adProvider.getAds(userId: userId);
-      final reviews = await _reviewProvider.getReviews(reviewedUserId: userId);
-      setState(() {
-        _myAds = ads;
-        _myReviews = reviews;
-        _isLoading = false;
-      });
+      try {
+        final reviews =
+            await _reviewProvider.getReviews(reviewedUserId: userId);
+        setState(() {
+          _myReviews = reviews;
+          _isLoading = false;
+        });
+      } catch (e) {
+        setState(() {
+          _isLoading = false;
+        });
+        if (mounted) showApiError(context, e);
+      }
     } else {
       setState(() {
         _isLoading = false;
@@ -70,49 +76,110 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-  Future<void> _deleteAd(Ad ad) async {
-    final confirmed = await showDialog<bool>(
+  void _showChangePasswordModal() {
+    final formKey = GlobalKey<FormState>();
+    final currentController = TextEditingController();
+    final newController = TextEditingController();
+    final confirmController = TextEditingController();
+    bool submitting = false;
+
+    showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Delete Ad'),
-        content: Text('Are you sure you want to delete "${ad.title}"?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+      barrierDismissible: false,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Change Password'),
+          content: SingleChildScrollView(
+            child: Form(
+              key: formKey,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextFormField(
+                    controller: currentController,
+                    obscureText: true,
+                    decoration:
+                        const InputDecoration(labelText: 'Current password'),
+                    validator: (v) => (v == null || v.isEmpty)
+                        ? 'Enter your current password'
+                        : null,
+                  ),
+                  const SizedBox(height: 10),
+                  TextFormField(
+                    controller: newController,
+                    obscureText: true,
+                    decoration: const InputDecoration(
+                        labelText: 'New password (min 6 chars)'),
+                    validator: (v) => (v == null || v.length < 6)
+                        ? 'New password must be at least 6 characters'
+                        : null,
+                  ),
+                  const SizedBox(height: 10),
+                  TextFormField(
+                    controller: confirmController,
+                    obscureText: true,
+                    decoration:
+                        const InputDecoration(labelText: 'Confirm new password'),
+                    validator: (v) => (v != newController.text)
+                        ? 'Passwords do not match'
+                        : null,
+                  ),
+                ],
+              ),
+            ),
           ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text('Delete', style: TextStyle(color: Colors.white)),
-          ),
-        ],
+          actions: [
+            TextButton(
+              onPressed: submitting ? null : () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _primaryColor,
+                foregroundColor: Colors.white,
+              ),
+              onPressed: submitting
+                  ? null
+                  : () async {
+                      if (!formKey.currentState!.validate()) return;
+                      setDialogState(() => submitting = true);
+                      final error = await widget.authProvider.changePassword(
+                        currentController.text,
+                        newController.text,
+                        confirmController.text,
+                      );
+                      if (!mounted) return;
+                      if (error == null) {
+                        Navigator.pop(context);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Password changed successfully.'),
+                            backgroundColor: Colors.green,
+                          ),
+                        );
+                      } else {
+                        setDialogState(() => submitting = false);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(error),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                      }
+                    },
+              child: submitting
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: Colors.white),
+                    )
+                  : const Text('Change'),
+            ),
+          ],
+        ),
       ),
     );
-
-    if (confirmed != true) return;
-
-    final success = await _adProvider.deleteAd(ad.id);
-    if (success) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Ad deleted successfully'),
-            backgroundColor: Colors.green,
-          ),
-        );
-      }
-      _loadData();
-    } else {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Could not delete the ad. It may have active requests or reviews.'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
   }
 
   void _showEditProfileModal() {
@@ -122,8 +189,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
         TextEditingController(text: user?.firstName ?? '');
     final lastNameController =
         TextEditingController(text: user?.lastName ?? '');
-    final usernameController =
-        TextEditingController(text: user?.username ?? '');
     final emailController = TextEditingController(text: user?.email ?? '');
     final phoneController = TextEditingController(text: user?.phone ?? '');
 
@@ -221,26 +286,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       ),
                       const SizedBox(height: 12),
                       TextFormField(
-                        controller: usernameController,
-                        decoration: InputDecoration(
-                          labelText: 'Username',
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          prefixIcon: const Icon(Icons.person),
-                        ),
-                        validator: (value) {
-                          if (value == null || value.trim().isEmpty) {
-                            return 'Username is required';
-                          }
-                          if (value.trim().length < 3) {
-                            return 'Username must be at least 3 characters';
-                          }
-                          return null;
-                        },
-                      ),
-                      const SizedBox(height: 12),
-                      TextFormField(
                         controller: emailController,
                         decoration: InputDecoration(
                           labelText: 'Email',
@@ -303,7 +348,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               userId: user!.id,
                               firstName: firstNameController.text.trim(),
                               lastName: lastNameController.text.trim(),
-                              username: usernameController.text.trim(),
                               email: emailController.text.trim(),
                               phone: phoneController.text.trim(),
                             );
@@ -326,7 +370,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               if (mounted) {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   const SnackBar(
-                                    content: Text('Could not update profile. The email or username may already be in use.'),
+                                    content: Text('Could not update profile. The email may already be in use.'),
                                     backgroundColor: Colors.red,
                                   ),
                                 );
@@ -370,7 +414,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ],
         ),
         content: const Text(
-          'Subscribe to VIP for 20 KM/month to get your ads highlighted and appear at the top of search results.\n\nYou will be redirected to a secure payment page.',
+          'Subscribe to VIP for 20 KM/month to get your ads highlighted and appear at the top of search results.\n\nPayment is handled securely in the app.',
         ),
         actions: [
           TextButton(
@@ -391,43 +435,150 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     if (confirmed != true) return;
 
-    if (mounted) {
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (context) => const Center(
-          child: CircularProgressIndicator(color: _primaryColor),
-        ),
-      );
-    }
-
-    final checkoutUrl = await widget.authProvider.createCheckoutSession();
-
-    if (mounted) Navigator.pop(context);
-
-    if (checkoutUrl != null) {
-      final uri = Uri.parse(checkoutUrl);
-      if (await canLaunchUrl(uri)) {
-        await launchUrl(uri, mode: LaunchMode.externalApplication);
-      } else {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Could not open the payment page. Please check your browser settings.'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-      }
-    } else {
+    // 1) Ask the backend to create the subscription and return the PaymentSheet params.
+    final params = await widget.authProvider.createSubscription();
+    if (params == null || params['clientSecret'] == null) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Could not start the payment process. Please try again later.'),
+            content: Text('Could not start the payment. Please try again later.'),
             backgroundColor: Colors.red,
           ),
         );
       }
+      return;
+    }
+
+    try {
+      // 2) Present the in-app Stripe PaymentSheet.
+      final pk = params['publishableKey'] as String?;
+      if (pk != null && pk.isNotEmpty) {
+        Stripe.publishableKey = pk;
+        await Stripe.instance.applySettings();
+      }
+
+      await Stripe.instance.initPaymentSheet(
+        paymentSheetParameters: SetupPaymentSheetParameters(
+          paymentIntentClientSecret: params['clientSecret'] as String,
+          merchantDisplayName: 'JumpIn',
+        ),
+      );
+      await Stripe.instance.presentPaymentSheet();
+
+      // 3) Payment confirmed by the SDK → verify & activate server-side.
+      final ok = await widget.authProvider.confirmSubscription();
+      if (mounted) {
+        setState(() {});
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(ok
+                ? 'VIP membership activated!'
+                : 'Payment received — activation is being processed.'),
+            backgroundColor: ok ? Colors.green : Colors.orange,
+          ),
+        );
+      }
+    } on StripeException catch (e) {
+      // Silently ignore user cancellation; surface real errors.
+      if (mounted && e.error.code != FailureCode.Canceled) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.error.localizedMessage ?? 'Payment failed.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Payment failed. Please try again.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _cancelSubscription() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Cancel VIP subscription'),
+        content: const Text(
+          'Your VIP benefits will remain active until the end of the current billing period, and the subscription will not renew after that.\n\nDo you want to cancel?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Keep VIP'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Cancel subscription'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    final ok = await widget.authProvider.cancelSubscription();
+    if (mounted) {
+      setState(() {});
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(ok
+              ? 'Subscription cancelled. VIP stays active until it expires.'
+              : 'Could not cancel the subscription. Please try again.'),
+          backgroundColor: ok ? Colors.green : Colors.red,
+        ),
+      );
+    }
+  }
+
+  Future<void> _uploadProfileImage() async {
+    final picker = ImagePicker();
+    final pickedFile = await picker.pickImage(source: ImageSource.gallery);
+
+    if (pickedFile == null) {
+      logDebug('Image picker: no file selected');
+      return;
+    }
+
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Uploading image...'), duration: Duration(seconds: 1)),
+    );
+
+    final userId = widget.authProvider.currentUser?.id;
+    if (userId == null) return;
+
+    try {
+      final imageUrl = await _userProvider.uploadProfileImage(pickedFile.path);
+      if (imageUrl == null) {
+        throw Exception('No image URL returned');
+      }
+
+      await _userProvider.updateProfileImage(userId, imageUrl);
+      await widget.authProvider.refreshUser();
+
+      if (mounted) {
+        setState(() {}); // Rebuild to display updated image
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Profile image updated successfully'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) showApiError(context, e);
     }
   }
 
@@ -461,49 +612,74 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       decoration: const BoxDecoration(color: _primaryColor),
                       child: Column(
                         children: [
-                          Stack(
-                            children: [
-                              CircleAvatar(
-                                radius: 50,
-                                backgroundColor: Colors.white,
-                                child: user?.profileImageUrl != null
-                                    ? ClipOval(
-                                        child: Image.network(
-                                          user!.profileImageUrl!,
-                                          width: 100,
-                                          height: 100,
-                                          fit: BoxFit.cover,
-                                          errorBuilder: (_, __, ___) => Icon(
-                                            Icons.person,
-                                            size: 50,
-                                            color: _primaryColor,
+                          GestureDetector(
+                            onTap: _uploadProfileImage,
+                            child: Stack(
+                              children: [
+                                CircleAvatar(
+                                  radius: 50,
+                                  backgroundColor: Colors.white,
+                                  child: user?.fullProfileImageUrl != null
+                                      ? ClipOval(
+                                          child: Image.network(
+                                            user!.fullProfileImageUrl!,
+                                            width: 100,
+                                            height: 100,
+                                            fit: BoxFit.cover,
+                                            errorBuilder: (_, __, ___) => Icon(
+                                              Icons.person,
+                                              size: 50,
+                                              color: _primaryColor,
+                                            ),
                                           ),
+                                        )
+                                      : const Icon(
+                                          Icons.person,
+                                          size: 50,
+                                          color: _primaryColor,
                                         ),
-                                      )
-                                    : const Icon(
-                                        Icons.person,
-                                        size: 50,
-                                        color: _primaryColor,
-                                      ),
-                              ),
-                              if (user?.isVip == true)
-                                Positioned(
-                                  bottom: 0,
-                                  right: 0,
+                                ),
+                                Positioned.fill(
                                   child: Container(
-                                    padding: const EdgeInsets.all(4),
-                                    decoration: const BoxDecoration(
-                                      color: Colors.amber,
+                                    decoration: BoxDecoration(
                                       shape: BoxShape.circle,
+                                      color: Colors.black.withOpacity(0.3),
                                     ),
-                                    child: const Icon(
-                                      Icons.star,
-                                      size: 18,
-                                      color: Colors.white,
+                                    child: Center(
+                                      child: Container(
+                                        padding: const EdgeInsets.all(8),
+                                        decoration: const BoxDecoration(
+                                          color: Colors.white,
+                                          shape: BoxShape.circle,
+                                        ),
+                                        child: const Icon(
+                                          Icons.camera_alt,
+                                          color: _primaryColor,
+                                          size: 28,
+                                        ),
+                                      ),
                                     ),
                                   ),
                                 ),
-                            ],
+                                if (user?.isVip == true)
+                                  Positioned(
+                                    top: 0,
+                                    right: 0,
+                                    child: Container(
+                                      padding: const EdgeInsets.all(4),
+                                      decoration: const BoxDecoration(
+                                        color: Colors.amber,
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: const Icon(
+                                        Icons.star,
+                                        size: 18,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
                           ),
                           const SizedBox(height: 16),
                           Text(
@@ -515,21 +691,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             ),
                           ),
                           const SizedBox(height: 4),
-                          Text(
-                            '@${user?.username ?? ''}',
-                            style: const TextStyle(
-                              color: Colors.white70,
-                              fontSize: 14,
+                          if (user?.email != null)
+                            Text(
+                              user!.email!,
+                              style: const TextStyle(
+                                color: Colors.white70,
+                                fontSize: 14,
+                              ),
                             ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            user?.email ?? '',
-                            style: const TextStyle(
-                              color: Colors.white70,
-                              fontSize: 14,
+                          if (user?.email != null)
+                            const SizedBox(height: 4),
+                          if (user?.phone != null)
+                            Text(
+                              user!.phone!,
+                              style: const TextStyle(
+                                color: Colors.white70,
+                                fontSize: 14,
+                              ),
                             ),
-                          ),
                           const SizedBox(height: 16),
                           // Stats row
                           Row(
@@ -537,7 +716,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             children: [
                               _buildStatItem(
                                 'Ads',
-                                '${user?.totalAds ?? _myAds.length}',
+                                '${user?.totalAds ?? 0}',
                               ),
                               Container(
                                 width: 1,
@@ -545,19 +724,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 color: Colors.white30,
                               ),
                               _buildStatItem(
-                                'Rating',
-                                user?.averageRating != null
+                                'Avg Rating',
+                                user?.averageRating != null && user!.averageRating! > 0
                                     ? user!.averageRating!.toStringAsFixed(1)
-                                    : 'N/A',
-                              ),
-                              Container(
-                                width: 1,
-                                height: 40,
-                                color: Colors.white30,
-                              ),
-                              _buildStatItem(
-                                'Reviews',
-                                '${user?.totalReviews ?? _myReviews.length}',
+                                    : 'None',
                               ),
                             ],
                           ),
@@ -634,49 +804,102 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           horizontal: 16,
                           vertical: 8,
                         ),
-                        padding: const EdgeInsets.all(16),
+                        padding: const EdgeInsets.all(18),
                         decoration: BoxDecoration(
                           gradient: LinearGradient(
                             colors: [Colors.amber[600]!, Colors.orange[600]!],
                           ),
                           borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: Row(
-                          children: [
-                            const Icon(
-                              Icons.star,
-                              color: Colors.white,
-                              size: 36,
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.orange.withAlpha(60),
+                              blurRadius: 10,
+                              offset: const Offset(0, 4),
                             ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Text(
-                                    'VIP Active',
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 16,
-                                    ),
+                          ],
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Row(
+                              children: [
+                                const Icon(Icons.star,
+                                    color: Colors.white, size: 36),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      const Text(
+                                        'VIP Active',
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 16,
+                                        ),
+                                      ),
+                                      if (user?.vipExpiresAt != null)
+                                        Text(
+                                          '${user!.vipCancelAtPeriodEnd ? "Active until" : "Renews"}: ${user.vipExpiresAt!.day.toString().padLeft(2, '0')}.${user.vipExpiresAt!.month.toString().padLeft(2, '0')}.${user.vipExpiresAt!.year}',
+                                          style: TextStyle(
+                                            color: Colors.white.withAlpha(220),
+                                            fontSize: 13,
+                                          ),
+                                        ),
+                                    ],
                                   ),
-                                  if (user?.vipExpiresAt != null)
-                                    Text(
-                                      'Expires: ${user!.vipExpiresAt!.day}.${user.vipExpiresAt!.month}.${user.vipExpiresAt!.year}',
-                                      style: TextStyle(
-                                        color: Colors.white.withAlpha(200),
-                                        fontSize: 13,
+                                ),
+                                const Icon(Icons.verified,
+                                    color: Colors.white, size: 32),
+                              ],
+                            ),
+                            if (user?.vipCancelAtPeriodEnd == true) ...[
+                              const SizedBox(height: 14),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 12, vertical: 10),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withAlpha(40),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: const Row(
+                                  children: [
+                                    Icon(Icons.info_outline,
+                                        color: Colors.white, size: 18),
+                                    SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        'Your subscription is cancelled and will not renew.',
+                                        style: TextStyle(
+                                            color: Colors.white, fontSize: 12.5),
                                       ),
                                     ),
-                                ],
+                                  ],
+                                ),
                               ),
-                            ),
-                            const Icon(
-                              Icons.verified,
-                              color: Colors.white,
-                              size: 32,
-                            ),
+                            ] else ...[
+                              const SizedBox(height: 16),
+                              SizedBox(
+                                width: double.infinity,
+                                child: OutlinedButton.icon(
+                                  onPressed: _cancelSubscription,
+                                  icon: const Icon(Icons.cancel_outlined,
+                                      size: 18, color: Colors.white),
+                                  label: const Text('Cancel subscription'),
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: Colors.white,
+                                    side: const BorderSide(
+                                        color: Colors.white, width: 1.4),
+                                    padding: const EdgeInsets.symmetric(
+                                        vertical: 12),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
                           ],
                         ),
                       ),
@@ -686,6 +909,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       icon: Icons.person_outline,
                       title: 'Edit Profile',
                       onTap: _showEditProfileModal,
+                    ),
+                    _buildMenuItem(
+                      icon: Icons.lock_outline,
+                      title: 'Change Password',
+                      onTap: _showChangePasswordModal,
                     ),
                     _buildMenuItem(
                       icon: Icons.rate_review,
@@ -707,24 +935,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       title: 'About JumpIn',
                       onTap: _showAboutModal,
                     ),
-
-                    // My Ads Section
-                    if (_myAds.isNotEmpty) ...[
-                      const Padding(
-                        padding: EdgeInsets.fromLTRB(20, 20, 20, 8),
-                        child: Align(
-                          alignment: Alignment.centerLeft,
-                          child: Text(
-                            'My Ads',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                      ),
-                      ..._myAds.map((ad) => _buildMyAdCard(ad)),
-                    ],
 
                     const SizedBox(height: 16),
 
@@ -847,95 +1057,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
         subtitle: subtitle != null ? Text(subtitle) : null,
         trailing: const Icon(Icons.chevron_right, color: Colors.grey),
         onTap: onTap,
-      ),
-    );
-  }
-
-  Widget _buildMyAdCard(Ad ad) {
-    Color typeColor;
-    switch (ad.adType.toLowerCase()) {
-      case 'route':
-        typeColor = Colors.blue[700]!;
-        break;
-      case 'carrental':
-      case 'car':
-        typeColor = Colors.orange[700]!;
-        break;
-      case 'apartmentrental':
-      case 'apartment':
-        typeColor = Colors.green[700]!;
-        break;
-      default:
-        typeColor = _primaryColor;
-    }
-
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withAlpha(10),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 16,
-          vertical: 4,
-        ),
-        leading: Container(
-          width: 44,
-          height: 44,
-          decoration: BoxDecoration(
-            color: typeColor.withAlpha(30),
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Icon(
-            ad.adType.toLowerCase() == 'route'
-                ? Icons.route
-                : ad.adType.toLowerCase().contains('car')
-                    ? Icons.directions_car
-                    : Icons.apartment,
-            color: typeColor,
-          ),
-        ),
-        title: Text(
-          ad.title,
-          style: const TextStyle(fontWeight: FontWeight.bold),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-        subtitle: Text(
-          ad.price != null ? '${ad.price!.toStringAsFixed(2)} KM' : '',
-          style: TextStyle(color: _primaryColor, fontWeight: FontWeight.w600),
-        ),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            IconButton(
-              icon: const Icon(Icons.visibility, color: Colors.grey),
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => AdDetailsScreen(
-                      ad: ad,
-                      authProvider: widget.authProvider,
-                    ),
-                  ),
-                );
-              },
-            ),
-            IconButton(
-              icon: const Icon(Icons.delete, color: Colors.red),
-              onPressed: () => _deleteAd(ad),
-            ),
-          ],
-        ),
       ),
     );
   }

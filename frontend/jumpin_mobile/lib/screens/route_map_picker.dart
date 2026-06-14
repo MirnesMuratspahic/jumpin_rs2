@@ -2,8 +2,9 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:http/http.dart' as http;
+import '../utils/config.dart';
 
-const String _googleApiKey = 'AIzaSyC-0_DaR3ubLN3d7Sz6jS39RdmolZOLz4Y';
+const String _googleApiKey = Config.googleMapsApiKey;
 
 class RouteMapPicker extends StatefulWidget {
   final String? initialCoordinates;

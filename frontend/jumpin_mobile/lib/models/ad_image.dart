@@ -1,9 +1,9 @@
 class AdImage {
-  final int id;
+  final String id;
   final String imageUrl;
   final bool isMainImage;
   final int displayOrder;
-  final int adId;
+  final String adId;
 
   AdImage({
     required this.id,
@@ -15,11 +15,11 @@ class AdImage {
 
   factory AdImage.fromJson(Map<String, dynamic> json) {
     return AdImage(
-      id: json['id'],
+      id: json['id'].toString(),
       imageUrl: json['imageUrl'] ?? '',
       isMainImage: json['isMainImage'] ?? false,
       displayOrder: json['displayOrder'] ?? 0,
-      adId: json['adId'] ?? 0,
+      adId: json['adId'].toString(),
     );
   }
 }

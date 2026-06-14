@@ -2,6 +2,8 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../models/review.dart';
 import '../utils/config.dart';
+import '../utils/api_exception.dart';
+import '../utils/app_logger.dart';
 
 class ReviewProvider {
   String get baseUrl => '${Config.apiBaseUrl}/Review';
@@ -17,8 +19,14 @@ class ReviewProvider {
         if (_token != null) "Authorization": "Bearer $_token",
       };
 
-  Future<List<Review>> getReviews({int? reviewerId, int? reviewedUserId}) async {
+  Future<List<Review>> getReviews(
+      {String? reviewerId, String? reviewedUserId}) async {
     try {
+      // If we're fetching reviews for a specific user, use the dedicated endpoint
+      if (reviewedUserId != null && reviewerId == null) {
+        return _getReviewsByUser(reviewedUserId);
+      }
+
       var url = baseUrl;
       final queryParams = <String>[];
 
@@ -48,46 +56,81 @@ class ReviewProvider {
         }
 
         return reviewList.map((json) => Review.fromJson(json)).toList();
-      } else {
-        return [];
       }
+      throw ApiException.fromResponse(response);
+    } on ApiException {
+      rethrow;
     } catch (e) {
-      return [];
+      throw ApiException.network(e);
+    }
+  }
+
+  Future<List<Review>> _getReviewsByUser(String userId) async {
+    try {
+      final url = '$baseUrl/user/$userId';
+      final response = await http.get(Uri.parse(url), headers: _headers);
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+
+        List<dynamic> reviewList;
+        if (data is List) {
+          reviewList = data;
+        } else {
+          return [];
+        }
+
+        return reviewList.map((json) => Review.fromJson(json)).toList();
+      }
+      throw ApiException.fromResponse(response);
+    } on ApiException {
+      rethrow;
+    } catch (e) {
+      throw ApiException.network(e);
     }
   }
 
   Future<bool> createReview({
-    required int reviewerId,
-    required int reviewedUserId,
+    required String reviewerId,
+    required String reviewedUserId,
     required int rating,
     String? comment,
-    int? adId,
+    String? adId,
   }) async {
     try {
+      final url = '$baseUrl/create-for-user/$reviewedUserId';
       final response = await http.post(
-        Uri.parse(baseUrl),
+        Uri.parse(url),
         headers: _headers,
         body: json.encode({
           'reviewerId': reviewerId,
-          'reviewedUserId': reviewedUserId,
           'rating': rating,
           'comment': comment,
           'adId': adId,
         }),
       );
 
-      return response.statusCode == 200;
+      logDebug('Review creation response: ${response.statusCode}');
+
+      if (response.statusCode == 200 || response.statusCode == 201) return true;
+      throw ApiException.fromResponse(response);
+    } on ApiException {
+      rethrow;
     } catch (e) {
-      return false;
+      throw ApiException.network(e);
     }
   }
 
-  Future<bool> deleteReview(int id) async {
+  Future<bool> deleteReview(String id) async {
     try {
-      final response = await http.delete(Uri.parse('$baseUrl/$id'), headers: _headers);
-      return response.statusCode == 200;
+      final response =
+          await http.delete(Uri.parse('$baseUrl/$id'), headers: _headers);
+      if (response.statusCode == 200) return true;
+      throw ApiException.fromResponse(response);
+    } on ApiException {
+      rethrow;
     } catch (e) {
-      return false;
+      throw ApiException.network(e);
     }
   }
 }

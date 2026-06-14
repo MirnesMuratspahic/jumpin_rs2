@@ -1,13 +1,14 @@
 import 'ad_image.dart';
 
 class Ad {
-  final int id;
+  final String id;
   final String title;
   final String? description;
   final String adType;
   final double? price;
   final String? dateAvailable;
   final String? timeAvailable;
+  final String status;
   final String? locationFrom;
   final String? locationTo;
   final String? location;
@@ -28,7 +29,7 @@ class Ad {
   final List<AdImage>? images;
   final bool isActive;
   final DateTime? createdAt;
-  final int userId;
+  final String userId;
   final String? userName;
   final String? userProfileImage;
   final double? userRating;
@@ -61,6 +62,7 @@ class Ad {
     this.imageUrl,
     this.images,
     this.isActive = true,
+    this.status = 'Active',
     this.createdAt,
     required this.userId,
     this.userName,
@@ -71,13 +73,14 @@ class Ad {
 
   factory Ad.fromJson(Map<String, dynamic> json) {
     return Ad(
-      id: json['id'],
+      id: json['id'].toString(),
       title: json['title'] ?? '',
       description: json['description'],
       adType: json['adType'] ?? 'Route',
       price: json['price']?.toDouble(),
       dateAvailable: json['dateAvailable'],
       timeAvailable: json['timeAvailable'],
+      status: (json['status'] ?? 'Active').toString(),
       locationFrom: json['locationFrom'],
       locationTo: json['locationTo'],
       location: json['location'],
@@ -102,8 +105,8 @@ class Ad {
       createdAt: json['createdAt'] != null
           ? DateTime.parse(json['createdAt'])
           : null,
-      userId: json['userId'] ?? 0,
-      userName: json['userName'],
+      userId: (json['userId'] ?? '').toString(),
+      userName: json['ownerFullName'] ?? json['userName'] ?? json['ownerUsername'],
       userProfileImage: json['userProfileImage'],
       userRating: json['userRating']?.toDouble(),
       isVipOwner: json['isVipOwner'] ?? false,
@@ -119,6 +122,7 @@ class Ad {
       'price': price,
       'dateAvailable': dateAvailable,
       'timeAvailable': timeAvailable,
+      'status': status,
       'locationFrom': locationFrom,
       'locationTo': locationTo,
       'location': location,
@@ -166,5 +170,30 @@ class Ad {
       return '${locationFrom ?? ''} -> ${locationTo ?? ''}';
     }
     return location ?? apartmentAddress ?? '';
+  }
+
+  String? get fullUserProfileImageUrl {
+    if (userProfileImage == null) return null;
+    if (userProfileImage!.startsWith('http')) return userProfileImage;
+    // Convert relative path to full URL
+    return 'http://192.168.0.4:5194${userProfileImage!}';
+  }
+
+  bool get isExpired {
+    if (dateAvailable == null || timeAvailable == null) return false;
+    try {
+      final date = DateTime.parse(dateAvailable!);
+      final timeParts = timeAvailable!.split(':');
+      final dateTime = DateTime(
+        date.year,
+        date.month,
+        date.day,
+        int.parse(timeParts[0]),
+        int.parse(timeParts[1]),
+      );
+      return dateTime.isBefore(DateTime.now());
+    } catch (e) {
+      return false;
+    }
   }
 }

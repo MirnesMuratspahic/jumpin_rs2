@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'dart:io';
+import 'package:flutter/services.dart';
 import '../models/request.dart';
 import '../providers/request_provider.dart';
 import '../providers/auth_provider.dart';
+import '../utils/error_handler.dart';
 
 class RequestsScreen extends StatefulWidget {
   final AuthProvider authProvider;
@@ -32,6 +36,12 @@ class _RequestsScreenState extends State<RequestsScreen>
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _loadRequests();
+  }
+
+  @override
   void dispose() {
     _tabController.dispose();
     super.dispose();
@@ -44,13 +54,23 @@ class _RequestsScreenState extends State<RequestsScreen>
 
     final userId = widget.authProvider.currentUser?.id;
     if (userId != null) {
-      final sent = await _requestProvider.getRequests(senderId: userId);
-      final received = await _requestProvider.getRequests(receiverId: userId);
-      setState(() {
-        _sentRequests = sent;
-        _receivedRequests = received;
-        _isLoading = false;
-      });
+      try {
+        // Fetch sent + received in parallel.
+        final results = await Future.wait([
+          _requestProvider.getRequests(senderId: userId),
+          _requestProvider.getRequests(receiverId: userId),
+        ]);
+        setState(() {
+          _sentRequests = results[0];
+          _receivedRequests = results[1];
+          _isLoading = false;
+        });
+      } catch (e) {
+        setState(() {
+          _isLoading = false;
+        });
+        if (mounted) showApiError(context, e);
+      }
     } else {
       setState(() {
         _isLoading = false;
@@ -85,10 +105,9 @@ class _RequestsScreenState extends State<RequestsScreen>
 
     if (confirmed != true) return;
 
-    final success = await _requestProvider.acceptRequest(request.id);
-
-    if (mounted) {
-      if (success) {
+    try {
+      await _requestProvider.acceptRequest(request.id);
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Request accepted!'),
@@ -96,14 +115,9 @@ class _RequestsScreenState extends State<RequestsScreen>
           ),
         );
         _loadRequests();
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Could not accept this request. It may have already been processed.'),
-            backgroundColor: Colors.red,
-          ),
-        );
       }
+    } catch (e) {
+      if (mounted) showApiError(context, e);
     }
   }
 
@@ -134,10 +148,9 @@ class _RequestsScreenState extends State<RequestsScreen>
 
     if (confirmed != true) return;
 
-    final success = await _requestProvider.declineRequest(request.id);
-
-    if (mounted) {
-      if (success) {
+    try {
+      await _requestProvider.declineRequest(request.id);
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Request declined'),
@@ -145,10 +158,193 @@ class _RequestsScreenState extends State<RequestsScreen>
           ),
         );
         _loadRequests();
-      } else {
+      }
+    } catch (e) {
+      if (mounted) showApiError(context, e);
+    }
+  }
+
+  Future<void> _openMessageApp(Request request, bool isSent) async {
+    final phoneNumber = isSent ? request.receiverPhone : request.senderPhone;
+    final userName = isSent ? request.receiverName : request.senderName;
+
+    if (phoneNumber == null || phoneNumber.isEmpty) {
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Could not decline this request. It may have already been processed.'),
+          SnackBar(
+            content: Text('${userName ?? "User"} has not provided a phone number.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      return;
+    }
+
+    try {
+      // Clean phone number
+      final cleanPhoneNumber = phoneNumber.replaceAll(RegExp(r'[\s\-\(\)]+'), '');
+
+      if (Platform.isAndroid || Platform.isIOS) {
+        // On mobile: open SMS app
+        final String smsUrl = 'sms:$cleanPhoneNumber';
+        final Uri smsUri = Uri.parse(smsUrl);
+
+        // ignore: deprecated_member_use
+        if (await canLaunchUrl(smsUri)) {
+          // ignore: deprecated_member_use
+          await launchUrl(smsUri);
+          return;
+        }
+      }
+
+      // On desktop: show phone number with copy option
+      if (mounted) {
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: Text('Message ${userName ?? "User"}'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Phone number:'),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: SelectableText(
+                        cleanPhoneNumber,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: () {
+                        Clipboard.setData(ClipboardData(text: cleanPhoneNumber));
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Phone number copied'),
+                            duration: Duration(seconds: 2),
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.copy),
+                      tooltip: 'Copy phone number',
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Close'),
+              ),
+            ],
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _sendMessage(Request request, bool isSent) async {
+    final phoneNumber = isSent ? request.receiverPhone : request.senderPhone;
+    final userName = isSent ? request.receiverName : request.senderName;
+
+    if (phoneNumber == null || phoneNumber.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${userName ?? "User"} has not provided a phone number.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      return;
+    }
+
+    try {
+      // Clean phone number - remove spaces, dashes, and parentheses
+      final cleanPhoneNumber = phoneNumber.replaceAll(RegExp(r'[\s\-\(\)]+'), '');
+
+      if (Platform.isAndroid || Platform.isIOS) {
+        // On mobile: open phone dialer
+        final String telUrl = 'tel:$cleanPhoneNumber';
+        final Uri telUri = Uri.parse(telUrl);
+
+        // ignore: deprecated_member_use
+        if (await canLaunchUrl(telUri)) {
+          // ignore: deprecated_member_use
+          await launchUrl(telUri);
+          return;
+        }
+      }
+
+      // On desktop/other platforms: show phone number with copy option
+      if (mounted) {
+        showDialog(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: Text('Call ${userName ?? "User"}'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Phone number:'),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: SelectableText(
+                        cleanPhoneNumber,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: () {
+                        Clipboard.setData(ClipboardData(text: cleanPhoneNumber));
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Phone number copied'),
+                            duration: Duration(seconds: 2),
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.copy),
+                      tooltip: 'Copy phone number',
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Close'),
+              ),
+            ],
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: ${e.toString()}'),
             backgroundColor: Colors.red,
           ),
         );
@@ -479,6 +675,54 @@ class _RequestsScreenState extends State<RequestsScreen>
                         ),
                       ),
                     ],
+                  ),
+                ],
+
+                // Call and message icons for accepted requests
+                if (request.isAccepted) ...[
+                  const SizedBox(height: 12),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        GestureDetector(
+                          onTap: () => _sendMessage(request, isSent),
+                          child: Container(
+                            width: 32,
+                            height: 32,
+                            decoration: BoxDecoration(
+                              color: Colors.green[600],
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.phone,
+                              size: 16,
+                              color: Colors.white,
+                            ),
+                            alignment: Alignment.center,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        GestureDetector(
+                          onTap: () => _openMessageApp(request, isSent),
+                          child: Container(
+                            width: 32,
+                            height: 32,
+                            decoration: BoxDecoration(
+                              color: Colors.blue[600],
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.message,
+                              size: 16,
+                              color: Colors.white,
+                            ),
+                            alignment: Alignment.center,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ],

@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../models/ad.dart';
 import '../utils/config.dart';
+import '../utils/api_exception.dart';
 
 class AdProvider {
   static String get baseUrl => Config.apiBaseUrl;
@@ -17,7 +18,11 @@ class AdProvider {
         if (_token != null) "Authorization": "Bearer $_token",
       };
 
-  Future<List<Ad>> getAds({String? adType, String? searchQuery, int? userId, bool? isActive}) async {
+  Future<List<Ad>> getAds(
+      {String? adType,
+      String? searchQuery,
+      String? userId,
+      bool? isActive}) async {
     try {
       var url = "$baseUrl/Ad";
       final queryParams = <String>[];
@@ -58,13 +63,15 @@ class AdProvider {
 
         return adList.map((json) => Ad.fromJson(json)).toList();
       }
-      return [];
+      throw ApiException.fromResponse(response);
+    } on ApiException {
+      rethrow;
     } catch (e) {
-      return [];
+      throw ApiException.network(e);
     }
   }
 
-  Future<Ad?> getAdById(int id) async {
+  Future<Ad?> getAdById(String id) async {
     try {
       var url = "$baseUrl/Ad/$id";
       var uri = Uri.parse(url);
@@ -74,9 +81,12 @@ class AdProvider {
         var data = jsonDecode(response.body);
         return Ad.fromJson(data);
       }
-      return null;
+      if (response.statusCode == 404) return null;
+      throw ApiException.fromResponse(response);
+    } on ApiException {
+      rethrow;
     } catch (e) {
-      return null;
+      throw ApiException.network(e);
     }
   }
 
@@ -85,7 +95,7 @@ class AdProvider {
     required String description,
     required String adType,
     required double price,
-    required int userId,
+    required String userId,
     String? dateAvailable,
     String? timeAvailable,
     String? locationFrom,
@@ -144,14 +154,16 @@ class AdProvider {
         var data = jsonDecode(response.body);
         return Ad.fromJson(data);
       }
-      return null;
+      throw ApiException.fromResponse(response);
+    } on ApiException {
+      rethrow;
     } catch (e) {
-      return null;
+      throw ApiException.network(e);
     }
   }
 
   Future<bool> updateAd({
-    required int id,
+    required String id,
     required String title,
     required String description,
     required String adType,
@@ -208,9 +220,12 @@ class AdProvider {
 
       var response = await http.put(uri, headers: _headers, body: body);
 
-      return response.statusCode == 200;
+      if (response.statusCode == 200) return true;
+      throw ApiException.fromResponse(response);
+    } on ApiException {
+      rethrow;
     } catch (e) {
-      return false;
+      throw ApiException.network(e);
     }
   }
 
@@ -232,26 +247,46 @@ class AdProvider {
         var data = jsonDecode(response.body);
         return data['imageUrl'] as String?;
       }
-      return null;
+      throw ApiException.fromResponse(response);
+    } on ApiException {
+      rethrow;
     } catch (e) {
-      return null;
+      throw ApiException.network(e);
     }
   }
 
-  Future<bool> deleteAd(int id) async {
+  Future<bool> deleteAd(String id) async {
     try {
       var url = "$baseUrl/Ad/$id";
       var uri = Uri.parse(url);
       var response = await http.delete(uri, headers: _headers);
 
-      return response.statusCode == 200;
+      if (response.statusCode == 200) return true;
+      throw ApiException.fromResponse(response);
+    } on ApiException {
+      rethrow;
     } catch (e) {
-      return false;
+      throw ApiException.network(e);
+    }
+  }
+
+  Future<bool> endAd(String id) async {
+    try {
+      var url = "$baseUrl/Ad/$id/end";
+      var uri = Uri.parse(url);
+      var response = await http.post(uri, headers: _headers);
+
+      if (response.statusCode == 200) return true;
+      throw ApiException.fromResponse(response);
+    } on ApiException {
+      rethrow;
+    } catch (e) {
+      throw ApiException.network(e);
     }
   }
 
   Future<bool> createAdImage({
-    required int adId,
+    required String adId,
     required String imageUrl,
     bool isMainImage = false,
     int displayOrder = 0,
@@ -266,20 +301,26 @@ class AdProvider {
         "displayOrder": displayOrder,
       });
       var response = await http.post(uri, headers: _headers, body: body);
-      return response.statusCode == 200;
+      if (response.statusCode == 200) return true;
+      throw ApiException.fromResponse(response);
+    } on ApiException {
+      rethrow;
     } catch (e) {
-      return false;
+      throw ApiException.network(e);
     }
   }
 
-  Future<bool> deleteAdImage(int id) async {
+  Future<bool> deleteAdImage(String id) async {
     try {
       var url = "$baseUrl/AdImage/$id";
       var uri = Uri.parse(url);
       var response = await http.delete(uri, headers: _headers);
-      return response.statusCode == 200;
+      if (response.statusCode == 200) return true;
+      throw ApiException.fromResponse(response);
+    } on ApiException {
+      rethrow;
     } catch (e) {
-      return false;
+      throw ApiException.network(e);
     }
   }
 }

@@ -1,14 +1,14 @@
 class Review {
-  final int? id;
+  final String? id;
   final int rating;
   final String? comment;
   final DateTime? createdAt;
-  final int reviewerId;
+  final String reviewerId;
   final String? reviewerName;
   final String? reviewerProfileImage;
-  final int reviewedUserId;
+  final String reviewedUserId;
   final String? reviewedUserName;
-  final int? adId;
+  final String? adId;
   final String? adTitle;
 
   Review({
@@ -27,18 +27,18 @@ class Review {
 
   factory Review.fromJson(Map<String, dynamic> json) {
     return Review(
-      id: json['id'],
+      id: json['id']?.toString(),
       rating: json['rating'] ?? 0,
       comment: json['comment'],
       createdAt: json['createdAt'] != null
           ? DateTime.parse(json['createdAt'])
           : null,
-      reviewerId: json['reviewerId'] ?? 0,
+      reviewerId: (json['reviewerId'] ?? '').toString(),
       reviewerName: json['reviewerName'],
       reviewerProfileImage: json['reviewerProfileImage'],
-      reviewedUserId: json['reviewedUserId'] ?? 0,
+      reviewedUserId: (json['reviewedUserId'] ?? '').toString(),
       reviewedUserName: json['reviewedUserName'],
-      adId: json['adId'],
+      adId: json['adId']?.toString(),
       adTitle: json['adTitle'],
     );
   }
@@ -57,5 +57,12 @@ class Review {
       'adId': adId,
       'adTitle': adTitle,
     };
+  }
+
+  String? get fullReviewerProfileImageUrl {
+    if (reviewerProfileImage == null) return null;
+    if (reviewerProfileImage!.startsWith('http')) return reviewerProfileImage;
+    // Convert relative path to full URL
+    return 'http://192.168.0.4:5194${reviewerProfileImage!}';
   }
 }

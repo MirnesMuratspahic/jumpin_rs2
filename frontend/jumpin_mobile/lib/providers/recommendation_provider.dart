@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../models/ad.dart';
 import '../utils/config.dart';
+import '../utils/api_exception.dart';
 
 class RecommendationProvider {
   static String get baseUrl => Config.apiBaseUrl;
@@ -17,7 +18,7 @@ class RecommendationProvider {
         if (_token != null) "Authorization": "Bearer $_token",
       };
 
-  Future<List<Ad>> getRecommendations(int userId, {int count = 10}) async {
+  Future<List<Ad>> getRecommendations(String userId, {int count = 10}) async {
     try {
       final response = await http.get(
         Uri.parse(
@@ -29,11 +30,12 @@ class RecommendationProvider {
       if (response.statusCode == 200) {
         final List<dynamic> data = json.decode(response.body);
         return data.map((json) => Ad.fromJson(json)).toList();
-      } else {
-        return [];
       }
+      throw ApiException.fromResponse(response);
+    } on ApiException {
+      rethrow;
     } catch (e) {
-      return [];
+      throw ApiException.network(e);
     }
   }
 }

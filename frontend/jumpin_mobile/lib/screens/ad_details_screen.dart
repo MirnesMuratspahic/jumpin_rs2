@@ -3,11 +3,18 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:http/http.dart' as http;
+import '../main.dart';
 import '../models/ad.dart';
+import '../models/user.dart';
 import '../providers/auth_provider.dart';
+import '../providers/ad_provider.dart';
 import '../providers/request_provider.dart';
+import '../utils/app_logger.dart';
+import '../utils/error_handler.dart';
+import '../utils/config.dart';
+import 'user_profile_screen.dart';
 
-const String _googleApiKey = 'AIzaSyC-0_DaR3ubLN3d7Sz6jS39RdmolZOLz4Y';
+const String _googleApiKey = Config.googleMapsApiKey;
 
 class AdDetailsScreen extends StatefulWidget {
   final Ad ad;
@@ -23,8 +30,10 @@ class AdDetailsScreen extends StatefulWidget {
   State<AdDetailsScreen> createState() => _AdDetailsScreenState();
 }
 
-class _AdDetailsScreenState extends State<AdDetailsScreen> {
+class _AdDetailsScreenState extends State<AdDetailsScreen> with RouteAware {
+  final _adProvider = AdProvider();
   final _requestProvider = RequestProvider();
+  late Ad _ad;
   bool _isSendingRequest = false;
   List<LatLng> _roadPolylinePoints = [];
   List<LatLng> _routeWaypoints = [];
@@ -36,12 +45,47 @@ class _AdDetailsScreenState extends State<AdDetailsScreen> {
   @override
   void initState() {
     super.initState();
+    _ad = widget.ad;
+    _adProvider.setToken(widget.authProvider.token);
     _requestProvider.setToken(widget.authProvider.token);
     _fetchRoadRoute();
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    routeObserver.subscribe(this, ModalRoute.of(context) as PageRoute);
+  }
+
+  @override
+  void didPopNext() {
+    _refreshAd();
+  }
+
+  Future<void> _refreshAd() async {
+    // Best-effort background refresh of already-displayed content; on failure we
+    // keep showing the current ad rather than interrupting the user.
+    try {
+      final updatedAd = await _adProvider.getAdById(_ad.id);
+      if (updatedAd != null && mounted) {
+        setState(() {
+          _ad = updatedAd;
+        });
+        _fetchRoadRoute();
+      }
+    } catch (e) {
+      logError('Failed to refresh ad', e);
+    }
+  }
+
+  @override
+  void dispose() {
+    routeObserver.unsubscribe(this);
+    super.dispose();
+  }
+
   Future<void> _fetchRoadRoute() async {
-    final ad = widget.ad;
+    final ad = _ad;
     List<LatLng> waypoints = [];
     if (ad.routeCoordinates != null && ad.routeCoordinates!.isNotEmpty) {
       try {
@@ -217,38 +261,37 @@ class _AdDetailsScreenState extends State<AdDetailsScreen> {
     final userId = widget.authProvider.currentUser?.id;
     if (userId == null) return;
 
-    final success = await _requestProvider.sendRequest(
-      senderId: userId,
-      adId: widget.ad.id,
-      message: messageController.text.isNotEmpty ? messageController.text : null,
-    );
+    try {
+      await _requestProvider.sendRequest(
+        senderId: userId,
+        adId: widget.ad.id,
+        message: messageController.text.isNotEmpty ? messageController.text : null,
+      );
 
-    setState(() {
-      _isSendingRequest = false;
-    });
-
-    if (mounted) {
-      if (success) {
+      if (mounted) {
+        setState(() {
+          _isSendingRequest = false;
+        });
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Request sent successfully!'),
             backgroundColor: Colors.green,
           ),
         );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Could not send the request. You may already have a pending request for this ad.'),
-            backgroundColor: Colors.red,
-          ),
-        );
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isSendingRequest = false;
+        });
+        showApiError(context, e);
       }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final ad = widget.ad;
+    final ad = _ad;
     final isOwnAd = widget.authProvider.currentUser?.id == ad.userId;
 
     return Scaffold(
@@ -329,6 +372,50 @@ class _AdDetailsScreenState extends State<AdDetailsScreen> {
                           ),
                         ),
                       ],
+                      if (ad.status?.toLowerCase() == 'ended')
+                        ...[
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 5,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.grey[600],
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Text(
+                              'ENDED',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ]
+                      else if (ad.isExpired)
+                        ...[
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 10,
+                              vertical: 5,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.red[600],
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Text(
+                              'EXPIRED',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ],
                     ],
                   ),
                   const SizedBox(height: 12),
@@ -438,75 +525,113 @@ class _AdDetailsScreenState extends State<AdDetailsScreen> {
                     ),
                   ),
                   const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      CircleAvatar(
-                        radius: 24,
-                        backgroundColor: Colors.grey[300],
-                        child: ad.userProfileImage != null
-                            ? ClipOval(
-                                child: Image.network(
-                                  ad.userProfileImage!,
-                                  width: 48,
-                                  height: 48,
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (_, __, ___) => Icon(
-                                    Icons.person,
-                                    size: 28,
-                                    color: Colors.grey[600],
+                  GestureDetector(
+                    onTap: () {
+                      final user = User(
+                        id: ad.userId,
+                        firstName: ad.userName,
+                        email: null,
+                        phone: null,
+                        profileImageUrl: ad.userProfileImage,
+                        registrationDate: null,
+                        lastLogin: null,
+                        status: null,
+                        blockReason: null,
+                        role: null,
+                        isVip: ad.isVipOwner,
+                        vipActivatedAt: null,
+                        vipExpiresAt: null,
+                        averageRating: ad.userRating,
+                        totalReviews: null,
+                        totalAds: null,
+                      );
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => UserProfileScreen(
+                            user: user,
+                            authProvider: widget.authProvider,
+                          ),
+                        ),
+                      );
+                    },
+                    child: Row(
+                      children: [
+                        CircleAvatar(
+                          radius: 24,
+                          backgroundColor: Colors.grey[300],
+                          child: ad.fullUserProfileImageUrl != null
+                              ? ClipOval(
+                                  child: Image.network(
+                                    ad.fullUserProfileImageUrl!,
+                                    width: 48,
+                                    height: 48,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (_, __, ___) => Icon(
+                                      Icons.person,
+                                      size: 28,
+                                      color: Colors.grey[600],
+                                    ),
                                   ),
+                                )
+                              : Icon(
+                                  Icons.person,
+                                  size: 28,
+                                  color: Colors.grey[600],
                                 ),
-                              )
-                            : Icon(
-                                Icons.person,
-                                size: 28,
-                                color: Colors.grey[600],
-                              ),
-                      ),
-                      const SizedBox(width: 12),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(
-                                ad.userName ?? 'Unknown User',
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 16,
-                                ),
+                              Row(
+                                children: [
+                                  Text(
+                                    ad.userName ?? 'Unknown User',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 16,
+                                    ),
+                                  ),
+                                  if (ad.isVipOwner) ...[
+                                    const SizedBox(width: 6),
+                                    const Icon(
+                                      Icons.star,
+                                      size: 18,
+                                      color: Colors.amber,
+                                    ),
+                                  ],
+                                ],
                               ),
-                              if (ad.isVipOwner) ...[
-                                const SizedBox(width: 6),
-                                const Icon(
-                                  Icons.star,
-                                  size: 18,
-                                  color: Colors.amber,
+                              if (ad.userRating != null && ad.userRating! > 0)
+                                Row(
+                                  children: [
+                                    const Icon(
+                                      Icons.star,
+                                      size: 16,
+                                      color: Colors.amber,
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      ad.userRating!.toStringAsFixed(1),
+                                      style: const TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                              ],
                             ],
                           ),
-                          if (ad.userRating != null && ad.userRating! > 0)
-                            Row(
-                              children: [
-                                const Icon(
-                                  Icons.star,
-                                  size: 16,
-                                  color: Colors.amber,
-                                ),
-                                const SizedBox(width: 4),
-                                Text(
-                                  ad.userRating!.toStringAsFixed(1),
-                                  style: const TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ],
-                            ),
-                        ],
-                      ),
-                    ],
+                        ),
+                        Icon(
+                          Icons.arrow_forward_ios,
+                          size: 16,
+                          color: Colors.grey[500],
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),
@@ -898,7 +1023,7 @@ class _AdDetailsScreenState extends State<AdDetailsScreen> {
         _buildDetailRow(Icons.trip_origin, 'From', ad.locationFrom ?? 'N/A'),
         _buildDetailRow(Icons.location_on, 'To', ad.locationTo ?? 'N/A'),
         if (ad.dateAvailable != null)
-          _buildDetailRow(Icons.calendar_today, 'Date', ad.dateAvailable!),
+          _buildDetailRow(Icons.calendar_today, 'Date', ad.dateAvailable!.split('T')[0]),
         if (ad.timeAvailable != null)
           _buildDetailRow(Icons.access_time, 'Time', ad.timeAvailable!),
       ],
@@ -923,7 +1048,7 @@ class _AdDetailsScreenState extends State<AdDetailsScreen> {
         if (ad.location != null)
           _buildDetailRow(Icons.location_on, 'Location', ad.location!),
         if (ad.dateAvailable != null)
-          _buildDetailRow(Icons.calendar_today, 'Available', ad.dateAvailable!),
+          _buildDetailRow(Icons.calendar_today, 'Available', ad.dateAvailable!.split('T')[0]),
       ],
     );
   }
@@ -942,7 +1067,7 @@ class _AdDetailsScreenState extends State<AdDetailsScreen> {
         if (ad.location != null)
           _buildDetailRow(Icons.location_city, 'City', ad.location!),
         if (ad.dateAvailable != null)
-          _buildDetailRow(Icons.calendar_today, 'Available', ad.dateAvailable!),
+          _buildDetailRow(Icons.calendar_today, 'Available', ad.dateAvailable!.split('T')[0]),
       ],
     );
   }

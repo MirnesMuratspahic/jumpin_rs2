@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import '../main.dart';
 import '../models/ad.dart';
 import '../providers/ad_provider.dart';
 import '../providers/recommendation_provider.dart';
 import '../providers/auth_provider.dart';
+import '../utils/app_logger.dart';
+import '../utils/error_handler.dart';
 import 'ad_details_screen.dart';
 import 'add_ad_screen.dart';
 
@@ -18,7 +21,7 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen> with RouteAware {
   final _adProvider = AdProvider();
   final _recommendationProvider = RecommendationProvider();
   List<Ad> _ads = [];
@@ -46,7 +49,19 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    routeObserver.subscribe(this, ModalRoute.of(context) as PageRoute);
+  }
+
+  @override
+  void didPopNext() {
+    _loadData();
+  }
+
+  @override
   void dispose() {
+    routeObserver.unsubscribe(this);
     _searchController.dispose();
     super.dispose();
   }
@@ -66,27 +81,46 @@ class _HomeScreenState extends State<HomeScreen> {
 
       List<Ad> recommended = [];
       if (widget.authProvider.currentUser != null) {
-        recommended = await _recommendationProvider.getRecommendations(
-          widget.authProvider.currentUser!.id,
-          count: 6,
-        );
+        // Recommendations are a non-critical enhancement: if they fail we still
+        // show the ad list rather than blocking the whole screen.
+        try {
+          recommended = await _recommendationProvider.getRecommendations(
+            widget.authProvider.currentUser!.id,
+            count: 6,
+          );
+          recommended = recommended.where((ad) => !ad.isExpired).toList();
+          recommended.sort((a, b) => a.isVipOwner ? -1 : (b.isVipOwner ? 1 : 0));
+        } catch (e) {
+          logError('Failed to load recommendations', e);
+        }
       }
 
       setState(() {
         _ads = ads;
-        _recommendedAds =
-            recommended.isNotEmpty ? recommended : ads.take(6).toList();
+        final filteredAds = ads.where((ad) => !ad.isExpired).toList();
+        final recommendedList = recommended.isNotEmpty ? recommended : filteredAds.take(6).toList();
+        recommendedList.sort((a, b) => b.isVipOwner ? -1 : (a.isVipOwner ? 1 : 0));
+        _recommendedAds = recommendedList;
         _isLoading = false;
       });
     } catch (e) {
       setState(() {
         _isLoading = false;
       });
+      if (mounted) showApiError(context, e);
     }
   }
 
   List<Ad> get _filteredAds {
     var filtered = _ads;
+
+    final currentUserId = widget.authProvider.currentUser?.id;
+    filtered = filtered.where((ad) {
+      final isOwnAd = ad.userId == currentUserId;
+      final isEnded = ad.status.toLowerCase() == 'ended';
+      final isExpired = ad.isExpired;
+      return isOwnAd || (!isEnded && !isExpired);
+    }).toList();
 
     if (_searchQuery.isNotEmpty) {
       filtered = filtered.where((ad) {
@@ -99,7 +133,44 @@ class _HomeScreenState extends State<HomeScreen> {
       }).toList();
     }
 
+    filtered.sort((a, b) => a.isVipOwner ? -1 : (b.isVipOwner ? 1 : 0));
+
     return filtered;
+  }
+
+  Future<void> _endAd(Ad ad) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('End Ad'),
+        content: Text('End ad "${ad.title}"? It will no longer be visible to others.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
+            child: const Text('End', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    try {
+      await _adProvider.endAd(ad.id);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Ad ended'), backgroundColor: Colors.green),
+        );
+        _loadData();
+      }
+    } catch (e) {
+      if (mounted) showApiError(context, e);
+    }
   }
 
   Future<void> _deleteAd(Ad ad) async {
@@ -124,18 +195,16 @@ class _HomeScreenState extends State<HomeScreen> {
 
     if (confirmed != true) return;
 
-    final success = await _adProvider.deleteAd(ad.id);
-    if (mounted) {
-      if (success) {
+    try {
+      await _adProvider.deleteAd(ad.id);
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Ad deleted successfully'), backgroundColor: Colors.green),
         );
         _loadData();
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not delete the ad. Please try again later.'), backgroundColor: Colors.red),
-        );
       }
+    } catch (e) {
+      if (mounted) showApiError(context, e);
     }
   }
 
@@ -487,6 +556,7 @@ class _HomeScreenState extends State<HomeScreen> {
         },
         backgroundColor: _primaryColor,
         foregroundColor: Colors.white,
+        heroTag: null,
         icon: const Icon(Icons.add),
         label: const Text('New Ad'),
       ),
@@ -583,7 +653,30 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ),
                 ),
-                if (ad.isVipOwner)
+                if (ad.isExpired)
+                  Positioned(
+                    top: 8,
+                    right: 8,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 6,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.red[600],
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: const Text(
+                        'EXPIRED',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 9,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  )
+                else if (ad.isVipOwner)
                   Positioned(
                     top: 8,
                     right: 8,
@@ -726,6 +819,46 @@ class _HomeScreenState extends State<HomeScreen> {
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ),
+                            if (ad.status.toLowerCase() == 'ended')
+                              Container(
+                                margin: const EdgeInsets.only(right: 8),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 4,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.grey[600],
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: const Text(
+                                  'ENDED',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              )
+                            else if (ad.isExpired)
+                              Container(
+                                margin: const EdgeInsets.only(right: 8),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 4,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.red[600],
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: const Text(
+                                  'EXPIRED',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
                             Container(
                               padding: const EdgeInsets.symmetric(
                                 horizontal: 8,
@@ -782,10 +915,10 @@ class _HomeScreenState extends State<HomeScreen> {
                       CircleAvatar(
                         radius: 14,
                         backgroundColor: Colors.grey[300],
-                        child: ad.userProfileImage != null
+                        child: ad.fullUserProfileImageUrl != null
                             ? ClipOval(
                                 child: Image.network(
-                                  ad.userProfileImage!,
+                                  ad.fullUserProfileImageUrl!,
                                   width: 28,
                                   height: 28,
                                   fit: BoxFit.cover,
@@ -810,14 +943,6 @@ class _HomeScreenState extends State<HomeScreen> {
                           color: Colors.grey[700],
                         ),
                       ),
-                      if (ad.isVipOwner) ...[
-                        const SizedBox(width: 4),
-                        const Icon(
-                          Icons.star,
-                          size: 14,
-                          color: Colors.amber,
-                        ),
-                      ],
                       if (ad.userRating != null && ad.userRating! > 0) ...[
                         const SizedBox(width: 8),
                         const Icon(
@@ -837,8 +962,20 @@ class _HomeScreenState extends State<HomeScreen> {
                     ],
                   ),
                   Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      if (_showMyAdsOnly) ...[
+                      Text(
+                        ad.price != null
+                            ? '${ad.price!.toStringAsFixed(2)} KM'
+                            : 'Price on request',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                          color: _primaryColor,
+                        ),
+                      ),
+                      if (_showMyAdsOnly && (ad.status ?? 'Active').toLowerCase() != 'ended') ...[
+                        const SizedBox(width: 12),
                         GestureDetector(
                           onTap: () => _editAd(ad),
                           child: Container(
@@ -850,30 +987,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             child: Icon(Icons.edit, size: 18, color: _primaryColor),
                           ),
                         ),
-                        const SizedBox(width: 8),
-                        GestureDetector(
-                          onTap: () => _deleteAd(ad),
-                          child: Container(
-                            padding: const EdgeInsets.all(6),
-                            decoration: BoxDecoration(
-                              color: Colors.red.withAlpha(20),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: const Icon(Icons.delete, size: 18, color: Colors.red),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
                       ],
-                      Text(
-                        ad.price != null
-                            ? '${ad.price!.toStringAsFixed(2)} KM'
-                            : 'Price on request',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                          color: _primaryColor,
-                        ),
-                      ),
                     ],
                   ),
                 ],

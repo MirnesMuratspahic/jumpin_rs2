@@ -4,6 +4,11 @@ class Config {
     return url;
   }
 
+  /// Google Maps / Directions API key. Injected at build time via
+  /// `--dart-define=GOOGLE_MAPS_API_KEY=...` rather than hardcoded in source.
+  static const String googleMapsApiKey =
+      String.fromEnvironment('GOOGLE_MAPS_API_KEY');
+
   static const int requestTimeout = 30;
   static const int pageSize = 20;
 }

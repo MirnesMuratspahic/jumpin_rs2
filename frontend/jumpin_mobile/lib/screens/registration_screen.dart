@@ -13,7 +13,6 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
   final _formKey = GlobalKey<FormState>();
   final _firstNameController = TextEditingController();
   final _lastNameController = TextEditingController();
-  final _usernameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
@@ -28,7 +27,6 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
   void dispose() {
     _firstNameController.dispose();
     _lastNameController.dispose();
-    _usernameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
@@ -44,7 +42,6 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
       final success = await _authProvider.register(
         firstName: _firstNameController.text.trim(),
         lastName: _lastNameController.text.trim(),
-        username: _usernameController.text.trim(),
         email: _emailController.text.trim(),
         password: _passwordController.text,
         passwordConfirmation: _confirmPasswordController.text,
@@ -150,27 +147,6 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                       ),
                     ),
                   ],
-                ),
-                const SizedBox(height: 16),
-
-                TextFormField(
-                  controller: _usernameController,
-                  decoration: InputDecoration(
-                    labelText: 'Username *',
-                    prefixIcon: const Icon(Icons.alternate_email),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return 'Please enter a username';
-                    }
-                    if (value.trim().length < 3) {
-                      return 'Username must be at least 3 characters';
-                    }
-                    return null;
-                  },
                 ),
                 const SizedBox(height: 16),
 

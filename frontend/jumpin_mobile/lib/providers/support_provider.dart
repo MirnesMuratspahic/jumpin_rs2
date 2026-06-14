@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../models/support_message.dart';
 import '../utils/config.dart';
+import '../utils/api_exception.dart';
 
 class SupportProvider {
   String get baseUrl => '${Config.apiBaseUrl}/Support';
@@ -17,7 +18,7 @@ class SupportProvider {
         if (_token != null) "Authorization": "Bearer $_token",
       };
 
-  Future<List<SupportMessage>> getMessages({int? userId}) async {
+  Future<List<SupportMessage>> getMessages({String? userId}) async {
     try {
       var url = baseUrl;
       if (userId != null) {
@@ -41,16 +42,17 @@ class SupportProvider {
         return messageList
             .map((json) => SupportMessage.fromJson(json))
             .toList();
-      } else {
-        return [];
       }
+      throw ApiException.fromResponse(response);
+    } on ApiException {
+      rethrow;
     } catch (e) {
-      return [];
+      throw ApiException.network(e);
     }
   }
 
   Future<bool> sendMessage({
-    required int userId,
+    required String userId,
     required String subject,
     required String message,
   }) async {
@@ -65,9 +67,12 @@ class SupportProvider {
         }),
       );
 
-      return response.statusCode == 200;
+      if (response.statusCode == 200) return true;
+      throw ApiException.fromResponse(response);
+    } on ApiException {
+      rethrow;
     } catch (e) {
-      return false;
+      throw ApiException.network(e);
     }
   }
 }

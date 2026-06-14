@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../providers/auth_provider.dart';
 import 'registration_screen.dart';
 import 'main_screen.dart';
+import 'forgot_password_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -12,7 +13,7 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _usernameController = TextEditingController();
+  final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _authProvider = AuthProvider();
   bool _isLoading = false;
@@ -22,7 +23,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   void dispose() {
-    _usernameController.dispose();
+    _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
@@ -34,7 +35,7 @@ class _LoginScreenState extends State<LoginScreen> {
       });
 
       final success = await _authProvider.login(
-        _usernameController.text,
+        _emailController.text,
         _passwordController.text,
       );
 
@@ -172,20 +173,20 @@ class _LoginScreenState extends State<LoginScreen> {
                 const SizedBox(height: 48),
 
                 TextFormField(
-                  controller: _usernameController,
+                  controller: _emailController,
                   decoration: InputDecoration(
-                    labelText: 'Username',
-                    prefixIcon: const Icon(Icons.person),
+                    labelText: 'Email',
+                    prefixIcon: const Icon(Icons.email),
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),
                   validator: (value) {
                     if (value == null || value.trim().isEmpty) {
-                      return 'Please enter your username';
+                      return 'Please enter your email';
                     }
-                    if (value.trim().length < 3) {
-                      return 'Username must be at least 3 characters';
+                    if (!value.contains('@') || !value.contains('.')) {
+                      return 'Please enter a valid email address';
                     }
                     return null;
                   },
@@ -253,7 +254,29 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                         ),
                 ),
-                const SizedBox(height: 16),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
+                    onPressed: _isLoading
+                        ? null
+                        : () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (context) => ForgotPasswordScreen(
+                                  authProvider: _authProvider,
+                                  initialEmail: _emailController.text.trim().isEmpty
+                                      ? null
+                                      : _emailController.text.trim(),
+                                ),
+                              ),
+                            );
+                          },
+                    child: Text(
+                      'Forgot password?',
+                      style: TextStyle(color: _primaryColor),
+                    ),
+                  ),
+                ),
 
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,

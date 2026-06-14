@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../models/city.dart';
 import '../utils/config.dart';
+import '../utils/api_exception.dart';
 
 class CityProvider {
   static String get baseUrl => Config.apiBaseUrl;
@@ -39,9 +40,11 @@ class CityProvider {
         cities.sort((a, b) => a.name.compareTo(b.name));
         return cities;
       }
-      return [];
+      throw ApiException.fromResponse(response);
+    } on ApiException {
+      rethrow;
     } catch (e) {
-      return [];
+      throw ApiException.network(e);
     }
   }
 }
