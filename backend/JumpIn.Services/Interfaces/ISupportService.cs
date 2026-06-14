@@ -7,5 +7,6 @@ namespace JumpIn.Services.Interfaces
 {
     public interface ISupportService : ICRUDService<SupportMessageDTO, SupportSearchObject, SupportInsertRequest, SupportUpdateRequest>
     {
+        SupportMessageDTO RespondToMessage(Guid id, string response);
     }
 }

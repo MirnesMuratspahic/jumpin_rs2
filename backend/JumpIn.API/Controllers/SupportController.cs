@@ -12,13 +12,25 @@ namespace JumpIn.API.Controllers
     [ApiController]
     public class SupportController : BaseCRUDController<SupportMessageDTO, SupportSearchObject, SupportInsertRequest, SupportUpdateRequest>
     {
-        public SupportController(ISupportService service) : base(service) { }
+        private readonly ISupportService _supportService;
 
-        [Authorize(Roles = "Admin")]
+        public SupportController(ISupportService service) : base(service)
+        {
+            _supportService = service;
+        }
+
+        [Authorize(Roles = "ADMIN")]
         [HttpPut("{id}")]
-        public new SupportMessageDTO Update(int id, [FromBody] SupportUpdateRequest request)
+        public new SupportMessageDTO Update(Guid id, [FromBody] SupportUpdateRequest request)
         {
             return _service.Update(id, request);
+        }
+
+        [Authorize(Roles = "ADMIN")]
+        [HttpPost("{id}/respond")]
+        public SupportMessageDTO RespondToMessage(Guid id, [FromBody] SupportRespondRequest request)
+        {
+            return _supportService.RespondToMessage(id, request.AdminResponse);
         }
     }
 }

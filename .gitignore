@@ -416,3 +416,18 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
+
+# JetBrains / Android Studio IDE files
+.idea/
+
+# Runtime-uploaded images (keep the folder, ignore its contents)
+backend/JumpIn.API/wwwroot/uploads/*
+!backend/JumpIn.API/wwwroot/uploads/.gitkeep
+
+# Flutter macOS build artifacts / Xcode output (not source)
+**/macos/build/
+**/macos/build_dd/
+**/macos/Pods/
+**/macos/Flutter/ephemeral/
+**/macos/.symlinks/
+**/ios/Pods/

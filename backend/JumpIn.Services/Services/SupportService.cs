@@ -74,7 +74,7 @@ namespace JumpIn.Services.Services
             entity.CreatedAt = DateTime.UtcNow;
         }
 
-        public override SupportMessageDTO Update(int id, SupportUpdateRequest request)
+        public override SupportMessageDTO Update(Guid id, SupportUpdateRequest request)
         {
             var entity = _context.SupportMessages.Include(s => s.User).FirstOrDefault(s => s.Id == id);
             if (entity == null)
@@ -96,6 +96,23 @@ namespace JumpIn.Services.Services
             return MapToDto(entity);
         }
 
+        public SupportMessageDTO RespondToMessage(Guid id, string response)
+        {
+            if (string.IsNullOrWhiteSpace(response))
+                throw new UserException("Response cannot be empty.");
+
+            var entity = _context.SupportMessages.Include(s => s.User).FirstOrDefault(s => s.Id == id);
+            if (entity == null)
+                throw new UserException("Support message not found.");
+
+            entity.Response = response;
+            entity.RespondedAt = DateTime.UtcNow;
+            entity.Status = SupportStatus.InProgress;
+
+            _context.SaveChanges();
+            return MapToDto(entity);
+        }
+
         private SupportMessageDTO MapToDto(SupportMessage entity)
         {
             return new SupportMessageDTO
@@ -103,12 +120,12 @@ namespace JumpIn.Services.Services
                 Id = entity.Id,
                 Subject = entity.Subject,
                 Message = entity.Message,
-                Response = entity.Response,
+                AdminResponse = entity.Response,
                 Status = entity.Status.ToString().ToUpper(),
                 CreatedAt = entity.CreatedAt,
                 RespondedAt = entity.RespondedAt,
                 UserId = entity.UserId,
-                UserName = entity.User != null ? $"{entity.User.FirstName} {entity.User.LastName}" : null,
+                UserUsername = entity.User != null ? $"{entity.User.FirstName} {entity.User.LastName}" : null,
                 UserEmail = entity.User?.Email
             };
         }
