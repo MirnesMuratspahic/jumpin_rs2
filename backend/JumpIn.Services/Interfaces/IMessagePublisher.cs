@@ -4,7 +4,7 @@ namespace JumpIn.Services.Interfaces
 {
     public interface IMessagePublisher
     {
-        void PublishEmail(EmailMessage message);
-        void PublishNotification(NotificationMessage message);
+        Task PublishEmailAsync(EmailMessage message);
+        Task PublishNotificationAsync(NotificationMessage message);
     }
 }

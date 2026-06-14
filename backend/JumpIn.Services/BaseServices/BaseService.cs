@@ -3,6 +3,7 @@ using JumpIn.Models.SearchObjects;
 using JumpIn.Services.BaseInterfaces;
 using JumpIn.Services.Database;
 using Mapster;
+using Microsoft.EntityFrameworkCore;
 
 namespace JumpIn.Services.BaseServices
 {
@@ -24,15 +25,11 @@ namespace JumpIn.Services.BaseServices
             query = AddFilter(query, search);
             query = ApplySorting(query, search);
 
-            var totalCount = query.Count();
+            var totalCount = await query.CountAsync();
 
-            if (search?.Page.HasValue == true && search?.PageSize.HasValue == true)
-            {
-                query = query.Skip((search.Page.Value - 1) * search.PageSize.Value)
-                             .Take(search.PageSize.Value);
-            }
+            query = query.ApplyPaging(search);
 
-            var list = query.ToList();
+            var list = await query.ToListAsync();
             var result = list.Adapt<List<TModel>>();
 
             return new PagedResult<TModel>
@@ -42,7 +39,7 @@ namespace JumpIn.Services.BaseServices
             };
         }
 
-        public virtual TModel GetById(int id)
+        public virtual TModel GetById(Guid id)
         {
             var entity = _context.Set<TDbEntity>().Find(id);
 

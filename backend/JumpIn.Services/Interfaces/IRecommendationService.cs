@@ -4,6 +4,6 @@ namespace JumpIn.Services.Interfaces
 {
     public interface IRecommendationService
     {
-        Task<List<AdDTO>> GetRecommendedAdsAsync(int userId, int count = 10);
+        Task<List<AdDTO>> GetRecommendedAdsAsync(Guid userId, int count = 10);
     }
 }

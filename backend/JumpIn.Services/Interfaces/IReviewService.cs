@@ -7,5 +7,7 @@ namespace JumpIn.Services.Interfaces
 {
     public interface IReviewService : ICRUDService<ReviewDTO, ReviewSearchObject, ReviewInsertRequest, ReviewUpdateRequest>
     {
+        List<ReviewDTO> GetReviewsByUser(Guid userId);
+        ReviewDTO CreateReviewForUser(Guid reviewedUserId, ReviewInsertRequest request);
     }
 }

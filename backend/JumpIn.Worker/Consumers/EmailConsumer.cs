@@ -32,7 +32,7 @@ namespace JumpIn.Worker.Consumers
                 Password = _configuration["RabbitMQ:Password"] ?? "guest"
             };
 
-            // Retry connection logic
+            // Retry connection with exponential backoff (1s, 2s, 4s, 8s ... capped at 30s).
             for (int i = 0; i < 10; i++)
             {
                 try
@@ -42,8 +42,9 @@ namespace JumpIn.Worker.Consumers
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogWarning("RabbitMQ connection attempt {Attempt} failed: {Message}. Retrying in 5s...", i + 1, ex.Message);
-                    await Task.Delay(5000, stoppingToken);
+                    var delaySeconds = Math.Min(30, (int)Math.Pow(2, i));
+                    _logger.LogWarning("RabbitMQ connection attempt {Attempt} failed: {Message}. Retrying in {Delay}s...", i + 1, ex.Message, delaySeconds);
+                    await Task.Delay(TimeSpan.FromSeconds(delaySeconds), stoppingToken);
                 }
             }
 

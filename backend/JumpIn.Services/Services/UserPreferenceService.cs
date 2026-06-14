@@ -25,11 +25,7 @@ namespace JumpIn.Services.Services
 
             var totalCount = await query.CountAsync();
 
-            if (search?.Page.HasValue == true && search?.PageSize.HasValue == true)
-            {
-                query = query.Skip((search.Page.Value - 1) * search.PageSize.Value)
-                             .Take(search.PageSize.Value);
-            }
+            query = query.ApplyPaging(search);
 
             var list = await query.ToListAsync();
             var result = list.Select(MapToDto).ToList();

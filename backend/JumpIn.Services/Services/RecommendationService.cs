@@ -17,7 +17,7 @@ namespace JumpIn.Services.Services
             _context = context;
         }
 
-        public async Task<List<AdDTO>> GetRecommendedAdsAsync(int userId, int count = 10)
+        public async Task<List<AdDTO>> GetRecommendedAdsAsync(Guid userId, int count = 10)
         {
             var user = await _context.Users.FindAsync(userId);
             if (user == null || user.IsDeleted)
@@ -96,10 +96,11 @@ namespace JumpIn.Services.Services
             return scoredAds.Select(a =>
             {
                 var dto = a.Adapt<AdDTO>();
-                dto.AdType = a.AdType.ToString().ToUpper();
+                dto.Type = a.AdType.ToString().ToUpper();
                 if (a.User != null)
                 {
-                    dto.UserName = $"{a.User.FirstName} {a.User.LastName}";
+                    dto.OwnerUsername = a.User.Email;
+                    dto.OwnerFullName = $"{a.User.FirstName} {a.User.LastName}".Trim();
                     dto.UserProfileImage = a.User.ProfileImageUrl;
                     dto.IsVipOwner = a.User.IsVip;
                 }

@@ -10,16 +10,21 @@ using JumpIn.Services.Database;
 using JumpIn.Services.Interfaces;
 using Mapster;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace JumpIn.Services.Services
 {
     public class RequestService : BaseCRUDService<RequestDTO, RequestSearchObject, Request, RequestInsertRequest, RequestUpdateRequest>, IRequestService
     {
         private readonly IMessagePublisher _messagePublisher;
+        private readonly ILogger<RequestService> _logger;
+        private readonly INotificationService _notificationService;
 
-        public RequestService(JumpInDbContext context, IMessagePublisher messagePublisher) : base(context)
+        public RequestService(JumpInDbContext context, IMessagePublisher messagePublisher, ILogger<RequestService> logger, INotificationService notificationService) : base(context)
         {
             _messagePublisher = messagePublisher;
+            _logger = logger;
+            _notificationService = notificationService;
         }
 
         public override async Task<PagedResult<RequestDTO>> GetPagedAsync(RequestSearchObject search)
@@ -36,11 +41,7 @@ namespace JumpIn.Services.Services
 
             var totalCount = await query.CountAsync();
 
-            if (search?.Page.HasValue == true && search?.PageSize.HasValue == true)
-            {
-                query = query.Skip((search.Page.Value - 1) * search.PageSize.Value)
-                             .Take(search.PageSize.Value);
-            }
+            query = query.ApplyPaging(search);
 
             var list = await query.ToListAsync();
             var result = list.Select(MapToDto).ToList();
@@ -52,7 +53,7 @@ namespace JumpIn.Services.Services
             };
         }
 
-        public override RequestDTO GetById(int id)
+        public override RequestDTO GetById(Guid id)
         {
             var entity = _context.Requests
                 .Include(r => r.Sender)
@@ -115,6 +116,8 @@ namespace JumpIn.Services.Services
                 throw new UserException("You already have a pending request for this ad.");
 
             entity.ReceiverId = ad.UserId;
+            entity.SenderEmail = sender.Email;
+            entity.ReceiverEmail = ad.User?.Email;
             entity.RequestNumber = GenerateRequestNumber();
             entity.Status = RequestStatus.Pending;
             entity.CreatedAt = DateTime.UtcNow;
@@ -129,26 +132,51 @@ namespace JumpIn.Services.Services
 
                 if (ad?.User != null && sender != null)
                 {
-                    _messagePublisher.PublishNotification(new NotificationMessage
-                    {
-                        UserId = ad.UserId,
-                        Title = "New Request",
-                        Body = $"{sender.FirstName} {sender.LastName} sent a request for your ad '{ad.Title}'.",
-                        Type = "REQUEST_CREATED"
-                    });
+                    // Persisted in-app notification for the ad owner (DB, synchronous).
+                    _notificationService.Create(
+                        ad.UserId,
+                        "New request",
+                        $"{sender.FirstName} {sender.LastName} sent a request for your ad '{ad.Title}'.",
+                        "REQUEST_CREATED");
 
-                    _messagePublisher.PublishEmail(new EmailMessage
-                    {
-                        To = ad.User.Email,
-                        Subject = $"New request for your ad: {ad.Title}",
-                        Body = $"<h2>New Request Received</h2><p>{sender.FirstName} {sender.LastName} has sent a request for your ad '<strong>{ad.Title}</strong>'.</p><p>Log in to JumpIn to respond.</p>"
-                    });
+                    // Queue the broker notification + email (best-effort, async).
+                    var senderName = $"{sender.FirstName} {sender.LastName}";
+                    _ = PublishRequestMessagesAsync(ad.UserId, ad.User.Email, ad.Title, senderName);
                 }
             }
-            catch { }
+            catch (Exception ex)
+            {
+                // Notification/email is best-effort; the request itself is already saved.
+                _logger.LogError(ex, "Failed to queue notification/email after creating request {RequestId}.", entity.Id);
+            }
         }
 
-        public async Task<RequestDTO> AcceptRequestAsync(int id)
+        private async Task PublishRequestMessagesAsync(Guid ownerId, string ownerEmail, string adTitle, string senderName)
+        {
+            try
+            {
+                await _messagePublisher.PublishNotificationAsync(new NotificationMessage
+                {
+                    UserId = ownerId,
+                    Title = "New Request",
+                    Body = $"{senderName} sent a request for your ad '{adTitle}'.",
+                    Type = "REQUEST_CREATED"
+                });
+
+                await _messagePublisher.PublishEmailAsync(new EmailMessage
+                {
+                    To = ownerEmail,
+                    Subject = $"New request for your ad: {adTitle}",
+                    Body = $"<h2>New Request Received</h2><p>{senderName} has sent a request for your ad '<strong>{adTitle}</strong>'.</p><p>Log in to JumpIn to respond.</p>"
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to publish notification/email for ad '{AdTitle}'.", adTitle);
+            }
+        }
+
+        public async Task<RequestDTO> AcceptRequestAsync(Guid id)
         {
             var entity = await _context.Requests
                 .Include(r => r.Sender)
@@ -173,10 +201,16 @@ namespace JumpIn.Services.Services
 
             await _context.SaveChangesAsync();
 
+            await _notificationService.CreateAsync(
+                entity.SenderId,
+                "Request accepted",
+                $"Your request for '{entity.Ad?.Title}' was accepted.",
+                "REQUEST_ACCEPTED");
+
             return MapToDto(entity);
         }
 
-        public async Task<RequestDTO> DeclineRequestAsync(int id)
+        public async Task<RequestDTO> DeclineRequestAsync(Guid id)
         {
             var entity = await _context.Requests
                 .Include(r => r.Sender)
@@ -194,6 +228,12 @@ namespace JumpIn.Services.Services
             entity.RespondedAt = DateTime.UtcNow;
             await _context.SaveChangesAsync();
 
+            await _notificationService.CreateAsync(
+                entity.SenderId,
+                "Request declined",
+                $"Your request for '{entity.Ad?.Title}' was declined.",
+                "REQUEST_DECLINED");
+
             return MapToDto(entity);
         }
 
@@ -210,10 +250,13 @@ namespace JumpIn.Services.Services
                 RequestNumber = entity.RequestNumber,
                 SenderId = entity.SenderId,
                 SenderName = entity.Sender != null ? $"{entity.Sender.FirstName} {entity.Sender.LastName}" : null,
-                SenderEmail = entity.Sender?.Email,
+                SenderEmail = entity.SenderEmail,
+                SenderPhone = entity.Sender?.Phone,
                 SenderProfileImage = entity.Sender?.ProfileImageUrl,
                 ReceiverId = entity.ReceiverId,
                 ReceiverName = entity.Receiver != null ? $"{entity.Receiver.FirstName} {entity.Receiver.LastName}" : null,
+                ReceiverEmail = entity.ReceiverEmail,
+                ReceiverPhone = entity.Receiver?.Phone,
                 AdId = entity.AdId,
                 AdTitle = entity.Ad?.Title,
                 AdType = entity.Ad?.AdType.ToString().ToUpper(),

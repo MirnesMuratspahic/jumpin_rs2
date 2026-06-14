@@ -1,5 +1,6 @@
 using JumpIn.Models.Messages;
 using MailKit.Net.Smtp;
+using MailKit.Security;
 using MimeKit;
 
 namespace JumpIn.Worker.Services
@@ -38,8 +39,13 @@ namespace JumpIn.Worker.Services
             email.Subject = message.Subject;
             email.Body = new TextPart("html") { Text = message.Body };
 
+            // Port 465 uses implicit SSL; 587 (Gmail) uses STARTTLS.
+            var secureOption = !useSsl
+                ? SecureSocketOptions.None
+                : (smtpPort == 465 ? SecureSocketOptions.SslOnConnect : SecureSocketOptions.StartTls);
+
             using var client = new SmtpClient();
-            await client.ConnectAsync(smtpHost, smtpPort, useSsl);
+            await client.ConnectAsync(smtpHost, smtpPort, secureOption);
             await client.AuthenticateAsync(smtpUsername, smtpPassword);
             await client.SendAsync(email);
             await client.DisconnectAsync(true);

@@ -16,6 +16,16 @@ namespace JumpIn.Services.Services
     {
         public AdService(JumpInDbContext context) : base(context) { }
 
+        // Insert saves the ad and then bumps the owner's TotalAds (two SaveChanges);
+        // wrap them in one transaction so they commit atomically.
+        public override AdDTO Insert(AdInsertRequest request)
+        {
+            using var tx = _context.Database.BeginTransaction();
+            var result = base.Insert(request);
+            tx.Commit();
+            return result;
+        }
+
         public override async Task<PagedResult<AdDTO>> GetPagedAsync(AdSearchObject search)
         {
             var query = _context.Ads
@@ -29,11 +39,7 @@ namespace JumpIn.Services.Services
 
             var totalCount = await query.CountAsync();
 
-            if (search?.Page.HasValue == true && search?.PageSize.HasValue == true)
-            {
-                query = query.Skip((search.Page.Value - 1) * search.PageSize.Value)
-                             .Take(search.PageSize.Value);
-            }
+            query = query.ApplyPaging(search);
 
             var list = await query.ToListAsync();
             var result = list.Select(MapToDto).ToList();
@@ -110,6 +116,12 @@ namespace JumpIn.Services.Services
             if (user == null || user.IsDeleted)
                 throw new UserException("User not found.");
 
+            // The client hides past slots, but the rule must also hold server-side
+            // since the API can be called directly.
+            if (request.DateAvailable.HasValue &&
+                request.DateAvailable.Value.Date < DateTime.UtcNow.Date)
+                throw new UserException("The availability date cannot be in the past.");
+
             entity.CreatedAt = DateTime.UtcNow;
             entity.IsActive = true;
         }
@@ -134,24 +146,41 @@ namespace JumpIn.Services.Services
             }
         }
 
-        public async Task<AdDTO> EndAdAsync(Guid id, Guid? userId = null)
+        public async Task<AdDTO> EndAdAsync(Guid id, Guid? ownerCheckUserId = null, Guid? actorUserId = null)
         {
-            var entity = _context.Ads
+            var entity = await _context.Ads
                 .Include(a => a.User)
                 .Include(a => a.AdImages)
-                .FirstOrDefault(a => a.Id == id && !a.IsDeleted);
+                .FirstOrDefaultAsync(a => a.Id == id && !a.IsDeleted);
 
             if (entity == null)
                 throw new UserException("Ad not found.");
 
-            if (userId.HasValue && entity.UserId != userId.Value)
+            if (ownerCheckUserId.HasValue && entity.UserId != ownerCheckUserId.Value)
                 throw new UserException("You can only end your own ads.");
 
             entity.Status = AdStatus.Ended;
             entity.IsActive = false;
-            _context.SaveChanges();
+            entity.EndedByUserId = actorUserId;
+            entity.EndedAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
 
             return MapToDto(entity);
+        }
+
+        public AdDTO Delete(Guid id, Guid? actorUserId)
+        {
+            // Soft-delete + TotalAds decrement are two saves — commit atomically.
+            using var tx = _context.Database.BeginTransaction();
+
+            // Record who performed the delete before the base soft-delete saves.
+            var entity = _context.Ads.Find(id);
+            if (entity != null)
+                entity.DeletedByUserId = actorUserId;
+
+            var result = Delete(id);
+            tx.Commit();
+            return result;
         }
 
         private AdDTO MapToDto(Ad entity)
@@ -163,6 +192,7 @@ namespace JumpIn.Services.Services
             if (entity.User != null)
             {
                 dto.OwnerUsername = entity.User.Email;
+                dto.OwnerFullName = $"{entity.User.FirstName} {entity.User.LastName}".Trim();
                 dto.UserProfileImage = entity.User.ProfileImageUrl;
                 dto.IsVipOwner = entity.User.IsVip;
                 dto.UserRating = entity.User.AverageRating;

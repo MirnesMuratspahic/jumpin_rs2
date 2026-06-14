@@ -3,6 +3,7 @@ using JumpIn.Models.Enums;
 using JumpIn.Models.Exceptions;
 using JumpIn.Models.HelperClasses;
 using JumpIn.Models.SearchObjects;
+using JumpIn.Services.BaseServices;
 using JumpIn.Services.Database;
 using JumpIn.Services.Interfaces;
 using Mapster;
@@ -44,11 +45,7 @@ namespace JumpIn.Services.Services
 
             var totalCount = await query.CountAsync();
 
-            if (search.Page.HasValue && search.PageSize.HasValue)
-            {
-                query = query.Skip((search.Page.Value - 1) * search.PageSize.Value)
-                             .Take(search.PageSize.Value);
-            }
+            query = query.ApplyPaging(search);
 
             var list = await query.ToListAsync();
             var result = list.Select(MapToDto).ToList();
@@ -60,7 +57,7 @@ namespace JumpIn.Services.Services
             };
         }
 
-        public ActivityLogDTO GetById(int id)
+        public ActivityLogDTO GetById(Guid id)
         {
             var entity = _context.ActivityLogs
                 .Include(al => al.User)
@@ -72,7 +69,7 @@ namespace JumpIn.Services.Services
             return MapToDto(entity);
         }
 
-        public async Task<List<ActivityLogDTO>> GetByUserAsync(int userId, int count = 20)
+        public async Task<List<ActivityLogDTO>> GetByUserAsync(Guid userId, int count = 20)
         {
             var logs = await _context.ActivityLogs
                 .Include(al => al.User)
@@ -84,7 +81,7 @@ namespace JumpIn.Services.Services
             return logs.Select(MapToDto).ToList();
         }
 
-        public async Task LogActivityAsync(int userId, ActivityType activityType, string description, int? entityId = null, string? entityType = null, string? ipAddress = null)
+        public async Task LogActivityAsync(Guid userId, ActivityType activityType, string description, Guid? entityId = null, string? entityType = null, string? ipAddress = null)
         {
             var log = new ActivityLog
             {

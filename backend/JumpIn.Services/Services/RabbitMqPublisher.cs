@@ -7,60 +7,73 @@ using RabbitMQ.Client;
 
 namespace JumpIn.Services.Services
 {
-    public class RabbitMqPublisher : IMessagePublisher, IDisposable
+    public class RabbitMqPublisher : IMessagePublisher, IAsyncDisposable
     {
-        private readonly IConnection _connection;
-        private readonly IChannel _channel;
+        private readonly ConnectionFactory _factory;
+        private readonly SemaphoreSlim _initLock = new(1, 1);
+        private IConnection? _connection;
+        private IChannel? _channel;
 
         public RabbitMqPublisher(IConfiguration configuration)
         {
-            var factory = new ConnectionFactory
+            // No blocking connect in the constructor; the connection is created
+            // lazily and asynchronously on the first publish.
+            _factory = new ConnectionFactory
             {
                 HostName = configuration["RabbitMQ:Host"] ?? "localhost",
                 Port = int.Parse(configuration["RabbitMQ:Port"] ?? "5672"),
                 UserName = configuration["RabbitMQ:Username"] ?? "guest",
                 Password = configuration["RabbitMQ:Password"] ?? "guest"
             };
-
-            _connection = factory.CreateConnectionAsync().GetAwaiter().GetResult();
-            _channel = _connection.CreateChannelAsync().GetAwaiter().GetResult();
-
-            _channel.QueueDeclareAsync("email_queue", durable: true, exclusive: false, autoDelete: false).GetAwaiter().GetResult();
-            _channel.QueueDeclareAsync("notification_queue", durable: true, exclusive: false, autoDelete: false).GetAwaiter().GetResult();
         }
 
-        public void PublishEmail(EmailMessage message)
-        {
-            Publish("email_queue", message);
-        }
+        public Task PublishEmailAsync(EmailMessage message) =>
+            PublishAsync("email_queue", message);
 
-        public void PublishNotification(NotificationMessage message)
-        {
-            Publish("notification_queue", message);
-        }
+        public Task PublishNotificationAsync(NotificationMessage message) =>
+            PublishAsync("notification_queue", message);
 
-        private void Publish<T>(string queue, T message)
+        private async Task EnsureChannelAsync()
         {
-            var json = JsonSerializer.Serialize(message);
-            var body = Encoding.UTF8.GetBytes(json);
+            if (_channel is { IsOpen: true }) return;
 
-            var properties = new BasicProperties
+            await _initLock.WaitAsync();
+            try
             {
-                Persistent = true
-            };
+                if (_channel is { IsOpen: true }) return;
 
-            _channel.BasicPublishAsync(
+                _connection ??= await _factory.CreateConnectionAsync();
+                _channel = await _connection.CreateChannelAsync();
+
+                await _channel.QueueDeclareAsync("email_queue", durable: true, exclusive: false, autoDelete: false);
+                await _channel.QueueDeclareAsync("notification_queue", durable: true, exclusive: false, autoDelete: false);
+            }
+            finally
+            {
+                _initLock.Release();
+            }
+        }
+
+        private async Task PublishAsync<T>(string queue, T message)
+        {
+            await EnsureChannelAsync();
+
+            var body = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(message));
+            var properties = new BasicProperties { Persistent = true };
+
+            await _channel!.BasicPublishAsync(
                 exchange: "",
                 routingKey: queue,
                 mandatory: false,
                 basicProperties: properties,
-                body: body).GetAwaiter().GetResult();
+                body: body);
         }
 
-        public void Dispose()
+        public async ValueTask DisposeAsync()
         {
-            _channel?.Dispose();
-            _connection?.Dispose();
+            if (_channel != null) await _channel.DisposeAsync();
+            if (_connection != null) await _connection.DisposeAsync();
+            _initLock.Dispose();
         }
     }
 }

@@ -1,7 +1,9 @@
+using JumpIn.Models.Exceptions;
 using JumpIn.Models.SearchObjects;
 using JumpIn.Services.BaseInterfaces;
 using JumpIn.Services.Database;
 using Mapster;
+using Microsoft.EntityFrameworkCore;
 
 namespace JumpIn.Services.BaseServices
 {
@@ -26,7 +28,7 @@ namespace JumpIn.Services.BaseServices
             return entity.Adapt<TModel>();
         }
 
-        public virtual TModel Update(int id, TUpdate request)
+        public virtual TModel Update(Guid id, TUpdate request)
         {
             var entity = _context.Set<TDbEntity>().Find(id);
 
@@ -46,12 +48,12 @@ namespace JumpIn.Services.BaseServices
             return entity.Adapt<TModel>();
         }
 
-        public virtual TModel Delete(int id)
+        public virtual TModel Delete(Guid id)
         {
             var entity = _context.Set<TDbEntity>().Find(id);
 
             if (entity == null)
-                throw new Exception("Entity not found");
+                throw new UserException("The item you are trying to delete was not found.");
 
             BeforeDelete(entity);
 
@@ -65,7 +67,15 @@ namespace JumpIn.Services.BaseServices
                 _context.Set<TDbEntity>().Remove(entity);
             }
 
-            _context.SaveChanges();
+            try
+            {
+                _context.SaveChanges();
+            }
+            catch (DbUpdateException)
+            {
+                // FK constraint: the record is referenced by other data.
+                throw new UserException("This record is in use by other data and cannot be deleted.");
+            }
 
             AfterDelete(entity);
 
