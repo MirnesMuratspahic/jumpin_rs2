@@ -434,3 +434,6 @@ backend/JumpIn.API/wwwroot/uploads/*
 
 # iOS Maps key (kept out of source control)
 **/ios/Flutter/Maps.xcconfig
+
+# Build artifacts are delivered via GitHub Releases, not committed
+fit-build-*.zip
