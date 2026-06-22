@@ -82,6 +82,30 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
     }
   }
 
+  Future<void> _exportCsv() async {
+    try {
+      final merged = <String, dynamic>{
+        ..._overviewData,
+        ..._adStats,
+        ..._requestStats,
+        ..._userStats,
+      };
+      final csv = ReportService.buildStatisticsCsv(merged);
+      final path = await ReportService.exportCsv(csv, 'jumpin-statistics');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('CSV saved to $path')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not generate CSV: $e')),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return MasterScreen(
@@ -99,14 +123,28 @@ class _StatisticsScreenState extends State<StatisticsScreen> {
                   children: [
                     Align(
                       alignment: Alignment.centerRight,
-                      child: ElevatedButton.icon(
-                        onPressed: _exportPdf,
-                        icon: const Icon(Icons.picture_as_pdf),
-                        label: const Text('Export PDF'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF0D47A1),
-                          foregroundColor: Colors.white,
-                        ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          OutlinedButton.icon(
+                            onPressed: _exportCsv,
+                            icon: const Icon(Icons.table_chart),
+                            label: const Text('Export CSV'),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: const Color(0xFF0D47A1),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          ElevatedButton.icon(
+                            onPressed: _exportPdf,
+                            icon: const Icon(Icons.picture_as_pdf),
+                            label: const Text('Export PDF'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF0D47A1),
+                              foregroundColor: Colors.white,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                     const SizedBox(height: 16),

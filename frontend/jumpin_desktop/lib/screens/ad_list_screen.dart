@@ -193,6 +193,18 @@ class _AdListScreenState extends State<AdListScreen> {
             icon: const Icon(Icons.picture_as_pdf, size: 20),
             label: const Text('Export PDF', style: TextStyle(fontWeight: FontWeight.bold)),
           ),
+          const SizedBox(width: 10),
+          OutlinedButton.icon(
+            style: OutlinedButton.styleFrom(
+              minimumSize: const Size(140, 50),
+              foregroundColor: const Color(0xFF1565C0),
+              side: const BorderSide(color: Color(0xFF1565C0)),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            onPressed: _exportCsv,
+            icon: const Icon(Icons.table_chart, size: 20),
+            label: const Text('Export CSV', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
           const SizedBox(width: 20),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 15),
@@ -468,6 +480,31 @@ class _AdListScreenState extends State<AdListScreen> {
     }
   }
 
+  Future<void> _exportCsv() async {
+    final ads = _adsResult?.result ?? [];
+    if (ads.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No ads to export.')),
+      );
+      return;
+    }
+    try {
+      final csv = ReportService.buildAdsCsv(ads);
+      final path = await ReportService.exportCsv(csv, 'jumpin-ads');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('CSV saved to $path')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not generate CSV: $e')),
+        );
+      }
+    }
+  }
+
   Color _statusColor(String? status) {
     switch (status) {
       case 'Active':
@@ -549,12 +586,12 @@ class _AdListScreenState extends State<AdListScreen> {
       try {
         await _adProvider.delete(ad.id!);
         if (context.mounted) {
-          await buildSuccessAlert(context, 'Success', 'Ad has been deleted successfully.');
+          await buildSuccessAlert(context, 'Ad deleted', 'The ad has been deleted successfully.');
         }
         _loadAds();
       } catch (e) {
         if (context.mounted) {
-          await buildErrorAlert(context, 'Error', e.toString(), e as Exception);
+          await buildErrorAlert(context, 'Could not delete ad', e.toString(), e as Exception);
         }
       }
     }

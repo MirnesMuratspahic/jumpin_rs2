@@ -41,6 +41,94 @@ class ReportService {
     return path;
   }
 
+  /// Saves a CSV file to ~/Downloads (falling back to temp) and opens it in the
+  /// default app (Excel/Numbers). Returns the saved path. CSV is used for further
+  /// business analysis/processing, separate from the PDF reports.
+  static Future<String> exportCsv(String content, String name) async {
+    final home = Platform.environment['HOME'] ??
+        Platform.environment['USERPROFILE'];
+    Directory dir = Directory.systemTemp;
+    if (home != null) {
+      final downloads = Directory('$home/Downloads');
+      if (await downloads.exists()) dir = downloads;
+    }
+
+    final path = '${dir.path}/$name-${_stamp.format(DateTime.now())}.csv';
+    // Prepend a BOM so Excel opens UTF-8 content correctly.
+    await File(path).writeAsString('﻿$content', flush: true);
+
+    if (Platform.isMacOS) {
+      await Process.run('open', [path]);
+    } else if (Platform.isWindows) {
+      await Process.run('cmd', ['/c', 'start', '', path]);
+    } else {
+      await Process.run('xdg-open', [path]);
+    }
+    return path;
+  }
+
+  static String _csvField(Object? v) {
+    final s = (v ?? '').toString();
+    if (s.contains(',') || s.contains('"') || s.contains('\n')) {
+      return '"${s.replaceAll('"', '""')}"';
+    }
+    return s;
+  }
+
+  static String _csvRow(List<Object?> cells) =>
+      cells.map(_csvField).join(',');
+
+  // CSV of the dashboard statistics (users, ads, requests by status, VIP, …).
+  static String buildStatisticsCsv(Map<String, dynamic> stats) {
+    int n(String key) =>
+        (stats[key] ?? 0) is num ? (stats[key] ?? 0).toInt() : 0;
+
+    final rows = <String>[_csvRow(['Metric', 'Value'])];
+    rows.add(_csvRow(['Total users', n('totalUsers')]));
+    rows.add(_csvRow(['Active users', n('activeUsers')]));
+    rows.add(_csvRow(['Blocked users', n('blockedUsers')]));
+    rows.add(_csvRow(['VIP users', n('vipUsers')]));
+    rows.add(_csvRow(['New users this month', n('newUsersThisMonth')]));
+    rows.add(_csvRow(['Total ads', n('totalAds')]));
+    rows.add(_csvRow(['Total requests', n('totalRequests')]));
+    rows.add(_csvRow(['Total reviews', n('totalReviews')]));
+    rows.add(_csvRow(['Support messages', n('totalSupportMessages')]));
+    rows.add(_csvRow(['Open support messages', n('openSupportMessages')]));
+
+    final adsByType = (stats['adsByType'] as Map?)?.cast<String, dynamic>() ?? {};
+    adsByType.forEach((k, v) => rows.add(_csvRow(['Ads - $k', v])));
+
+    final reqByStatus =
+        (stats['requestsByStatus'] as Map?)?.cast<String, dynamic>() ?? {};
+    reqByStatus.forEach((k, v) => rows.add(_csvRow(['Requests - $k', v])));
+
+    final avg = stats['averageRating'];
+    rows.add(_csvRow(
+        ['Average rating', avg is num ? avg.toStringAsFixed(2) : '0.00']));
+
+    return rows.join('\n');
+  }
+
+  // CSV of an ads listing (title, type, price, status, owner, created date).
+  static String buildAdsCsv(List<Ad> ads) {
+    final rows = <String>[
+      _csvRow(['Title', 'Type', 'Owner', 'Price', 'Status', 'Created'])
+    ];
+    for (final a in ads) {
+      rows.add(_csvRow([
+        a.title ?? '',
+        a.type ?? '',
+        a.ownerFullName?.isNotEmpty == true
+            ? a.ownerFullName!
+            : (a.ownerUsername ?? ''),
+        a.price != null ? a.price!.toStringAsFixed(2) : '',
+        a.status ?? '',
+        a.createdAt != null ? _date.format(a.createdAt!) : '',
+      ]));
+    }
+    return rows.join('\n');
+  }
+
   // ---------------- Report 1: Statistics overview ----------------
 
   static Future<Uint8List> buildStatisticsReport(Map<String, dynamic> stats) async {

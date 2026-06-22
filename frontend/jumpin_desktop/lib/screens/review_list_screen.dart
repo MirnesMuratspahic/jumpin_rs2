@@ -391,12 +391,12 @@ class _ReviewListScreenState extends State<ReviewListScreen> {
       try {
         await _reviewProvider.delete(review.id!);
         if (context.mounted) {
-          await buildSuccessAlert(context, 'Success', 'Review has been deleted successfully.');
+          await buildSuccessAlert(context, 'Review deleted', 'The review has been deleted successfully.');
         }
         _loadReviews();
       } catch (e) {
         if (context.mounted) {
-          await buildErrorAlert(context, 'Error', e.toString(), e as Exception);
+          await buildErrorAlert(context, 'Could not delete review', e.toString(), e as Exception);
         }
       }
     }

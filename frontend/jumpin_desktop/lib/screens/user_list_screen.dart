@@ -471,19 +471,19 @@ class _UserListScreenState extends State<UserListScreen> {
       try {
         await _userProvider.blockUser(user.id!, '');
         if (context.mounted) {
-          await buildSuccessAlert(context, 'Success', 'User has been blocked successfully.');
+          await buildSuccessAlert(context, 'User blocked', 'The user has been blocked successfully.');
           await _loadUsers();
         }
       } catch (e) {
         // Check if it's a success with empty response
         if (e.toString().contains('successful but response is empty')) {
           if (context.mounted) {
-            await buildSuccessAlert(context, 'Success', 'User has been blocked successfully.');
+            await buildSuccessAlert(context, 'User blocked', 'The user has been blocked successfully.');
             await _loadUsers();
           }
         } else {
           if (context.mounted) {
-            await buildErrorAlert(context, 'Error', e.toString(), e as Exception);
+            await buildErrorAlert(context, 'Could not block user', e.toString(), e as Exception);
           }
         }
       }
@@ -519,19 +519,19 @@ class _UserListScreenState extends State<UserListScreen> {
       try {
         await _userProvider.unblockUser(user.id!);
         if (context.mounted) {
-          await buildSuccessAlert(context, 'Success', 'User has been unblocked successfully.');
+          await buildSuccessAlert(context, 'User unblocked', 'The user has been unblocked successfully.');
           await _loadUsers();
         }
       } catch (e) {
         // Check if it's a success with empty response
         if (e.toString().contains('successful but response is empty')) {
           if (context.mounted) {
-            await buildSuccessAlert(context, 'Success', 'User has been unblocked successfully.');
+            await buildSuccessAlert(context, 'User unblocked', 'The user has been unblocked successfully.');
             await _loadUsers();
           }
         } else {
           if (context.mounted) {
-            await buildErrorAlert(context, 'Error', e.toString(), e as Exception);
+            await buildErrorAlert(context, 'Could not unblock user', e.toString(), e as Exception);
           }
         }
       }

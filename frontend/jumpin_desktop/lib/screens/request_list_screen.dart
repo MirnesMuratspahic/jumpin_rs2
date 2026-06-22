@@ -484,12 +484,12 @@ class _RequestListScreenState extends State<RequestListScreen> {
       try {
         await _requestProvider.delete(req.id!);
         if (context.mounted) {
-          await buildSuccessAlert(context, 'Success', 'Request has been deleted successfully.');
+          await buildSuccessAlert(context, 'Request deleted', 'The request has been deleted successfully.');
         }
         _loadRequests();
       } catch (e) {
         if (context.mounted) {
-          await buildErrorAlert(context, 'Error', e.toString(), e as Exception);
+          await buildErrorAlert(context, 'Could not delete request', e.toString(), e as Exception);
         }
       }
     }
