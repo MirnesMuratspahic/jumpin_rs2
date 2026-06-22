@@ -128,8 +128,9 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
             ),
             validator: (v) {
               if (v == null || v.trim().isEmpty) return 'Please enter your email';
-              if (!v.contains('@') || !v.contains('.')) {
-                return 'Please enter a valid email address';
+              final emailRegex = RegExp(r'^[\w.\-]+@([\w\-]+\.)+[\w\-]{2,}$');
+              if (!emailRegex.hasMatch(v.trim())) {
+                return 'Enter a valid email (e.g. user@example.com)';
               }
               return null;
             },

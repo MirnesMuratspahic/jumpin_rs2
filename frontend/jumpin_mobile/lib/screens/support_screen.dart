@@ -92,6 +92,12 @@ class SupportScreenState extends State<SupportScreen> {
 
   Future<void> _sendMessage() async {
     if (_messageController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please type a message before sending.'),
+          backgroundColor: Colors.orange,
+        ),
+      );
       return;
     }
 

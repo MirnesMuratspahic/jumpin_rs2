@@ -4,9 +4,11 @@ import 'package:url_launcher/url_launcher.dart';
 import 'dart:io';
 import 'package:flutter/services.dart';
 import '../models/request.dart';
+import '../models/user.dart';
 import '../providers/request_provider.dart';
 import '../providers/auth_provider.dart';
 import '../utils/error_handler.dart';
+import 'user_profile_screen.dart';
 
 class RequestsScreen extends StatefulWidget {
   final AuthProvider authProvider;
@@ -122,12 +124,27 @@ class _RequestsScreenState extends State<RequestsScreen>
   }
 
   Future<void> _declineRequest(Request request) async {
+    final reasonController = TextEditingController();
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Decline Request'),
-        content: Text(
-          'Decline request from ${request.senderName ?? 'Unknown'}?',
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('Decline request from ${request.senderName ?? 'Unknown'}?'),
+            const SizedBox(height: 12),
+            TextField(
+              controller: reasonController,
+              maxLines: 2,
+              maxLength: 200,
+              decoration: const InputDecoration(
+                labelText: 'Reason (optional)',
+                hintText: 'Let them know why…',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
         ),
         actions: [
           TextButton(
@@ -149,7 +166,11 @@ class _RequestsScreenState extends State<RequestsScreen>
     if (confirmed != true) return;
 
     try {
-      await _requestProvider.declineRequest(request.id);
+      final reason = reasonController.text.trim();
+      await _requestProvider.declineRequest(
+        request.id,
+        reason: reason.isEmpty ? null : reason,
+      );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -607,6 +628,37 @@ class _RequestsScreenState extends State<RequestsScreen>
                     ),
                   ),
                 ],
+                // Decline reason shown to the sender on declined requests.
+                if (request.isDeclined &&
+                    request.declineReason != null &&
+                    request.declineReason!.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.red[50],
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.red[100]!),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(Icons.info_outline,
+                            size: 16, color: Colors.red[400]),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Reason: ${request.declineReason!}',
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: Colors.red[700],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 8),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -724,11 +776,48 @@ class _RequestsScreenState extends State<RequestsScreen>
                       ],
                     ),
                   ),
+                  // Review is started from the accepted request — the counterparty's
+                  // profile opens with the review action (no manual ID entry).
+                  const SizedBox(height: 8),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: () => _leaveReview(request, isSent),
+                      icon: const Icon(Icons.rate_review, size: 18),
+                      label: const Text('Leave a review'),
+                    ),
+                  ),
                 ],
               ],
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  // Opens the counterparty's profile (where the review modal lives). The user id
+  // is passed in the background — never typed in by the user.
+  void _leaveReview(Request request, bool isSent) {
+    final counterpartId = isSent ? request.receiverId : request.senderId;
+    final counterpartName = isSent ? request.receiverName : request.senderName;
+    final counterpartImage = isSent ? null : request.senderProfileImage;
+
+    final parts = (counterpartName ?? '').trim().split(' ');
+    final counterpart = User(
+      id: counterpartId,
+      firstName: parts.isNotEmpty && parts.first.isNotEmpty ? parts.first : null,
+      lastName: parts.length > 1 ? parts.sublist(1).join(' ') : null,
+      profileImageUrl: counterpartImage,
+    );
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => UserProfileScreen(
+          user: counterpart,
+          authProvider: widget.authProvider,
+        ),
       ),
     );
   }

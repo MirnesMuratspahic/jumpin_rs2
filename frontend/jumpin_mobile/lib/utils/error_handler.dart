@@ -33,6 +33,42 @@ void showApiError(BuildContext context, Object error) {
   }
 }
 
+/// Like [showApiError] but renders the message as a modal dialog so it appears
+/// ON TOP of everything — use this inside bottom sheets / modals where a
+/// bottom-anchored SnackBar would be hidden behind the sheet.
+void showApiErrorDialog(BuildContext context, Object error) {
+  if (!context.mounted) return;
+
+  final message = error is ApiException
+      ? error.message
+      : 'Something went wrong. Please try again.';
+
+  if (error is ApiException && error.isUnauthorized) {
+    _forceReLogin(context);
+    return;
+  }
+
+  showDialog(
+    context: context,
+    builder: (dialogContext) => AlertDialog(
+      title: Row(
+        children: [
+          Icon(Icons.error_outline, color: Colors.red.shade700),
+          const SizedBox(width: 8),
+          const Text('Unable to continue'),
+        ],
+      ),
+      content: Text(message),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(dialogContext).pop(),
+          child: const Text('OK'),
+        ),
+      ],
+    ),
+  );
+}
+
 void _forceReLogin(BuildContext context) {
   // Clear the stored session, then route to login removing the back stack.
   Provider.of<AuthProvider>(context, listen: false).logout();

@@ -121,7 +121,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                         ),
                         validator: (value) {
                           if (value == null || value.trim().isEmpty) {
-                            return 'Required';
+                            return 'First name is required';
                           }
                           return null;
                         },
@@ -140,7 +140,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                         ),
                         validator: (value) {
                           if (value == null || value.trim().isEmpty) {
-                            return 'Required';
+                            return 'Last name is required';
                           }
                           return null;
                         },

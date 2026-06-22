@@ -19,10 +19,11 @@ class UserProvider {
         if (_token != null) "Authorization": "Bearer $_token",
       };
 
-  Future<User?> getUserById(String id) async {
+  // Public, privacy-safe profile of another user (no email/phone/role/status).
+  Future<User?> getPublicProfile(String id) async {
     try {
       final response = await http.get(
-        Uri.parse('$baseUrl/$id'),
+        Uri.parse('$baseUrl/$id/public'),
         headers: _headers,
       );
 

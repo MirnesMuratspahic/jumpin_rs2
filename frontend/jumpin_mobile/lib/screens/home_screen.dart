@@ -732,21 +732,62 @@ class _HomeScreenState extends State<HomeScreen> with RouteAware {
                     ],
                   ),
                   const SizedBox(height: 8),
-                  Text(
-                    ad.price != null
-                        ? '${ad.price!.toStringAsFixed(2)} KM'
-                        : 'Price on request',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 14,
-                      color: _primaryColor,
-                    ),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          ad.price != null
+                              ? '${ad.price!.toStringAsFixed(2)} KM'
+                              : 'Price on request',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                            color: _primaryColor,
+                          ),
+                        ),
+                      ),
+                      // Compact "why recommended" hint — tap to reveal, keeps the
+                      // card uncluttered.
+                      if (ad.recommendationReason != null)
+                        GestureDetector(
+                          onTap: () =>
+                              _showRecommendationReason(ad.recommendationReason!),
+                          behavior: HitTestBehavior.opaque,
+                          child: Padding(
+                            padding: const EdgeInsets.only(left: 4),
+                            child: Icon(Icons.help_outline,
+                                size: 18, color: Colors.amber[700]),
+                          ),
+                        ),
+                    ],
                   ),
                 ],
               ),
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  void _showRecommendationReason(String reason) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.lightbulb_outline, color: Colors.amber[700], size: 22),
+            const SizedBox(width: 8),
+            const Text('Why recommended'),
+          ],
+        ),
+        content: Text(reason, style: const TextStyle(fontSize: 14, height: 1.4)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Got it'),
+          ),
+        ],
       ),
     );
   }

@@ -104,12 +104,13 @@ class RequestProvider {
     }
   }
 
-  Future<bool> declineRequest(String id) async {
+  Future<bool> declineRequest(String id, {String? reason}) async {
     try {
       var url = "$baseUrl/Request/$id/decline";
       var uri = Uri.parse(url);
 
-      var response = await http.post(uri, headers: _headers);
+      var response = await http.post(uri,
+          headers: _headers, body: jsonEncode({"reason": reason}));
 
       if (response.statusCode == 200) return true;
       throw ApiException.fromResponse(response);

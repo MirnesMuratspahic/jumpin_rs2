@@ -402,6 +402,86 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  Future<void> _startPhoneVerification() async {
+    // 1) Ask the server to send the SMS code.
+    final sent = await widget.authProvider.sendPhoneCode();
+    if (!mounted) return;
+    if (!sent) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not send the verification code. Try again later.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    // 2) Prompt for the code.
+    final codeController = TextEditingController();
+    final code = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Verify phone number'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'We sent a 6-digit verification code. Enter it below to confirm your number.',
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: codeController,
+              keyboardType: TextInputType.number,
+              maxLength: 6,
+              decoration: const InputDecoration(
+                labelText: 'Verification code',
+                counterText: '',
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, codeController.text.trim()),
+            child: const Text('Verify'),
+          ),
+        ],
+      ),
+    );
+
+    if (code == null || code.isEmpty) return;
+    if (!RegExp(r'^\d{6}$').hasMatch(code)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Enter the 6-digit code from the message.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    // 3) Confirm server-side.
+    final error = await widget.authProvider.verifyPhone(code);
+    if (!mounted) return;
+    if (error == null) {
+      setState(() {});
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Phone number verified successfully.'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error), backgroundColor: Colors.red),
+      );
+    }
+  }
+
   Future<void> _activateVip() async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -702,12 +782,51 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           if (user?.email != null)
                             const SizedBox(height: 4),
                           if (user?.phone != null)
-                            Text(
-                              user!.phone!,
-                              style: const TextStyle(
-                                color: Colors.white70,
-                                fontSize: 14,
-                              ),
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  user!.phone!,
+                                  style: const TextStyle(
+                                    color: Colors.white70,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                if (user.isPhoneVerified)
+                                  const Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.verified,
+                                          color: Colors.lightGreenAccent, size: 16),
+                                      SizedBox(width: 2),
+                                      Text('Verified',
+                                          style: TextStyle(
+                                            color: Colors.lightGreenAccent,
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w600,
+                                          )),
+                                    ],
+                                  )
+                                else
+                                  GestureDetector(
+                                    onTap: _startPhoneVerification,
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 8, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: Colors.white24,
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                      child: const Text('Verify',
+                                          style: TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w600,
+                                          )),
+                                    ),
+                                  ),
+                              ],
                             ),
                           const SizedBox(height: 16),
                           // Stats row

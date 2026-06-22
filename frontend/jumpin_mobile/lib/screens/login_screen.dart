@@ -185,8 +185,10 @@ class _LoginScreenState extends State<LoginScreen> {
                     if (value == null || value.trim().isEmpty) {
                       return 'Please enter your email';
                     }
-                    if (!value.contains('@') || !value.contains('.')) {
-                      return 'Please enter a valid email address';
+                    final emailRegex =
+                        RegExp(r'^[\w.\-]+@([\w\-]+\.)+[\w\-]{2,}$');
+                    if (!emailRegex.hasMatch(value.trim())) {
+                      return 'Enter a valid email (e.g. user@example.com)';
                     }
                     return null;
                   },

@@ -16,6 +16,7 @@ class Request {
   final String? message;
   final DateTime? createdAt;
   final DateTime? respondedAt;
+  final String? declineReason;
 
   Request({
     required this.id,
@@ -35,6 +36,7 @@ class Request {
     this.message,
     this.createdAt,
     this.respondedAt,
+    this.declineReason,
   });
 
   factory Request.fromJson(Map<String, dynamic> json) {
@@ -92,6 +94,7 @@ class Request {
       respondedAt: json['respondedAt'] != null
           ? DateTime.parse(json['respondedAt'])
           : null,
+      declineReason: json['declineReason'],
     );
   }
 
@@ -114,6 +117,7 @@ class Request {
       'message': message,
       'createdAt': createdAt?.toIso8601String(),
       'respondedAt': respondedAt?.toIso8601String(),
+      'declineReason': declineReason,
     };
   }
 

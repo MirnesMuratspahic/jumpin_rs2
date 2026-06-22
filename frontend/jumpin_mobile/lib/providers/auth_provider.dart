@@ -152,27 +152,42 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
-  Future<bool> activateVip() async {
+  // Requests an SMS verification code for the current user's phone number.
+  Future<bool> sendPhoneCode() async {
     try {
       if (_currentUser == null) return false;
-      var url = "$baseUrl/User/${_currentUser!.id}/activate-vip";
-      var uri = Uri.parse(url);
-
-      var response = await http.post(uri, headers: authHeaders);
-
-      if (response.statusCode == 200) {
-        var data = jsonDecode(response.body);
-        _currentUser = User.fromJson(data);
-
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('user', jsonEncode(data));
-
-        notifyListeners();
-        return true;
-      }
-      return false;
+      final uri = Uri.parse("$baseUrl/User/${_currentUser!.id}/send-phone-code");
+      final response = await http.post(uri, headers: authHeaders);
+      return response.statusCode == 200;
     } catch (e) {
       return false;
+    }
+  }
+
+  // Confirms the code. Returns null on success, or an error message to show.
+  Future<String?> verifyPhone(String code) async {
+    try {
+      if (_currentUser == null) return "You are not logged in.";
+      final uri = Uri.parse("$baseUrl/User/${_currentUser!.id}/verify-phone");
+      final response = await http.post(uri,
+          headers: authHeaders, body: jsonEncode({"code": code}));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        _currentUser = User.fromJson(data);
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('user', jsonEncode(data));
+        notifyListeners();
+        return null;
+      }
+      try {
+        return jsonDecode(response.body)['message']?.toString() ??
+            "Verification failed.";
+      } catch (_) {
+        return "Verification failed.";
+      }
+    } catch (e) {
+      return "Could not verify the code. Please try again.";
     }
   }
 

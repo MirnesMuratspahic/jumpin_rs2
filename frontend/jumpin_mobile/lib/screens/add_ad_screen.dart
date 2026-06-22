@@ -707,8 +707,12 @@ class _AddAdScreenState extends State<AddAdScreen> {
                   if (value == null || value.trim().isEmpty) {
                     return 'Please enter a price';
                   }
-                  if (double.tryParse(value) == null) {
-                    return 'Please enter a valid number';
+                  final parsed = double.tryParse(value.trim());
+                  if (parsed == null) {
+                    return 'Price must be a number (e.g. 25.00)';
+                  }
+                  if (parsed <= 0) {
+                    return 'Price must be greater than 0';
                   }
                   return null;
                 },
@@ -1395,7 +1399,7 @@ class _AddAdScreenState extends State<AddAdScreen> {
                 validator: (value) {
                   if (_selectedAdType == 'Car' &&
                       (value == null || value.trim().isEmpty)) {
-                    return 'Required';
+                    return 'Brand is required';
                   }
                   return null;
                 },
@@ -1417,7 +1421,7 @@ class _AddAdScreenState extends State<AddAdScreen> {
                 validator: (value) {
                   if (_selectedAdType == 'Car' &&
                       (value == null || value.trim().isEmpty)) {
-                    return 'Required';
+                    return 'Model is required';
                   }
                   return null;
                 },
@@ -1441,6 +1445,18 @@ class _AddAdScreenState extends State<AddAdScreen> {
                   filled: true,
                   fillColor: Colors.white,
                 ),
+                validator: (value) {
+                  if (_selectedAdType == 'Car' &&
+                      value != null &&
+                      value.trim().isNotEmpty) {
+                    final year = int.tryParse(value.trim());
+                    if (year == null) return 'Year must be a number';
+                    if (year < 1950 || year > DateTime.now().year + 1) {
+                      return 'Enter a valid year';
+                    }
+                  }
+                  return null;
+                },
               ),
             ),
             const SizedBox(width: 12),
@@ -1457,6 +1473,17 @@ class _AddAdScreenState extends State<AddAdScreen> {
                   filled: true,
                   fillColor: Colors.white,
                 ),
+                validator: (value) {
+                  if (_selectedAdType == 'Car' &&
+                      value != null &&
+                      value.trim().isNotEmpty) {
+                    final seats = int.tryParse(value.trim());
+                    if (seats == null || seats <= 0) {
+                      return 'Seats must be a positive number';
+                    }
+                  }
+                  return null;
+                },
               ),
             ),
           ],
@@ -1487,7 +1514,7 @@ class _AddAdScreenState extends State<AddAdScreen> {
         ),
         const SizedBox(height: 12),
         _buildCityDropdown(
-          label: 'Location',
+          label: 'Location *',
           value: _selectedCity,
           icon: Icons.location_on,
           onChanged: (city) {
@@ -1498,6 +1525,12 @@ class _AddAdScreenState extends State<AddAdScreen> {
                 _pickedLongitude = city.longitude;
               }
             });
+          },
+          validator: (value) {
+            if (_selectedAdType == 'Car' && value == null) {
+              return 'Please select a location';
+            }
+            return null;
           },
         ),
         _buildLocationPickerButton('Car Location', Colors.orange[700]!),
@@ -1540,7 +1573,7 @@ class _AddAdScreenState extends State<AddAdScreen> {
         ),
         const SizedBox(height: 12),
         _buildCityDropdown(
-          label: 'City',
+          label: 'City *',
           value: _selectedCity,
           icon: Icons.location_city,
           onChanged: (city) {
@@ -1551,6 +1584,12 @@ class _AddAdScreenState extends State<AddAdScreen> {
                 _pickedLongitude = city.longitude;
               }
             });
+          },
+          validator: (value) {
+            if (_selectedAdType == 'Apartment' && value == null) {
+              return 'Please select a city';
+            }
+            return null;
           },
         ),
         const SizedBox(height: 12),
@@ -1569,6 +1608,17 @@ class _AddAdScreenState extends State<AddAdScreen> {
                   filled: true,
                   fillColor: Colors.white,
                 ),
+                validator: (value) {
+                  if (_selectedAdType == 'Apartment' &&
+                      value != null &&
+                      value.trim().isNotEmpty) {
+                    final rooms = int.tryParse(value.trim());
+                    if (rooms == null || rooms <= 0) {
+                      return 'Rooms must be a positive number';
+                    }
+                  }
+                  return null;
+                },
               ),
             ),
             const SizedBox(width: 12),
@@ -1585,6 +1635,17 @@ class _AddAdScreenState extends State<AddAdScreen> {
                   filled: true,
                   fillColor: Colors.white,
                 ),
+                validator: (value) {
+                  if (_selectedAdType == 'Apartment' &&
+                      value != null &&
+                      value.trim().isNotEmpty) {
+                    final area = double.tryParse(value.trim());
+                    if (area == null || area <= 0) {
+                      return 'Area must be greater than 0';
+                    }
+                  }
+                  return null;
+                },
               ),
             ),
           ],

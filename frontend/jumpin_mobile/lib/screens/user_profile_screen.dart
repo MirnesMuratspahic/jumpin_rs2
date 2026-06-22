@@ -46,7 +46,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> with RouteAware {
     // Best-effort enrichment of the profile already passed in; on failure we
     // keep showing the data we have.
     try {
-      final fullUser = await _userProvider.getUserById(_user.id);
+      final fullUser = await _userProvider.getPublicProfile(_user.id);
       if (fullUser != null && mounted) {
         setState(() {
           _user = fullUser;
@@ -242,7 +242,10 @@ class _UserProfileScreenState extends State<UserProfileScreen> with RouteAware {
                                     setState(() {
                                       _isSubmittingReview = false;
                                     });
-                                    if (mounted) showApiError(context, e);
+                                    // Shown as a dialog so it appears above the
+                                    // review bottom sheet (a SnackBar would be
+                                    // hidden behind it).
+                                    if (mounted) showApiErrorDialog(context, e);
                                   }
                                 },
                           style: ElevatedButton.styleFrom(
@@ -326,24 +329,8 @@ class _UserProfileScreenState extends State<UserProfileScreen> with RouteAware {
                                       fontWeight: FontWeight.bold,
                                     ),
                                   ),
-                                  if (_user.email != null)
-                                    Text(
-                                      _user.email!,
-                                      style: TextStyle(
-                                        fontSize: 14,
-                                        color: Colors.grey[600],
-                                      ),
-                                    ),
-                                  if (_user.phone != null) ...[
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      _user.phone!,
-                                      style: TextStyle(
-                                        fontSize: 14,
-                                        color: Colors.grey[600],
-                                      ),
-                                    ),
-                                  ],
+                                  // Email/phone are private and intentionally not
+                                  // shown on another user's public profile.
                                   if (_user.isVip)
                                     Padding(
                                       padding: const EdgeInsets.only(top: 4),

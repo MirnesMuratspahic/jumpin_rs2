@@ -34,6 +34,8 @@ class Ad {
   final String? userProfileImage;
   final double? userRating;
   final bool isVipOwner;
+  // Filled only for recommended ads — explains why this ad was suggested.
+  final String? recommendationReason;
 
   Ad({
     required this.id,
@@ -69,6 +71,7 @@ class Ad {
     this.userProfileImage,
     this.userRating,
     this.isVipOwner = false,
+    this.recommendationReason,
   });
 
   factory Ad.fromJson(Map<String, dynamic> json) {
@@ -110,6 +113,7 @@ class Ad {
       userProfileImage: json['userProfileImage'],
       userRating: json['userRating']?.toDouble(),
       isVipOwner: json['isVipOwner'] ?? false,
+      recommendationReason: json['recommendationReason'],
     );
   }
 

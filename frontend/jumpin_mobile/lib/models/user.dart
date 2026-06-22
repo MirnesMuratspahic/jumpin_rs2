@@ -4,6 +4,7 @@ class User {
   final String? lastName;
   final String? email;
   final String? phone;
+  final bool isPhoneVerified;
   final String? profileImageUrl;
   final DateTime? registrationDate;
   final DateTime? lastLogin;
@@ -24,6 +25,7 @@ class User {
     this.lastName,
     this.email,
     this.phone,
+    this.isPhoneVerified = false,
     this.profileImageUrl,
     this.registrationDate,
     this.lastLogin,
@@ -46,6 +48,7 @@ class User {
       lastName: json['lastName'],
       email: json['email'],
       phone: json['phone'] ?? json['phoneNumber'],
+      isPhoneVerified: json['isPhoneVerified'] ?? false,
       profileImageUrl: json['profileImageUrl'],
       registrationDate: json['registrationDate'] != null
           ? DateTime.parse(json['registrationDate'])
@@ -77,6 +80,7 @@ class User {
       'lastName': lastName,
       'email': email,
       'phone': phone,
+      'isPhoneVerified': isPhoneVerified,
       'profileImageUrl': profileImageUrl,
       'registrationDate': registrationDate?.toIso8601String(),
       'lastLogin': lastLogin?.toIso8601String(),
