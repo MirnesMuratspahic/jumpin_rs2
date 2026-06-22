@@ -15,6 +15,11 @@ namespace JumpIn.Services.Database
         public string? ResetPasswordCodeHash { get; set; }
         public DateTime? ResetPasswordExpiresAt { get; set; }
         public string? Phone { get; set; }
+        // Phone verification (SMS code): only the BCrypt hash of the code is stored.
+        public bool IsPhoneVerified { get; set; }
+        public DateTime? PhoneVerifiedAt { get; set; }
+        public string? PhoneVerificationCodeHash { get; set; }
+        public DateTime? PhoneVerificationExpiresAt { get; set; }
         public string? ProfileImageUrl { get; set; }
         public DateTime RegistrationDate { get; set; }
         public DateTime? LastLogin { get; set; }

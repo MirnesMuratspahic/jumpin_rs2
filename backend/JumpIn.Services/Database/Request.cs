@@ -23,6 +23,10 @@ namespace JumpIn.Services.Database
         public DateTime CreatedAt { get; set; }
         public DateTime? RespondedAt { get; set; }
 
+        // Audit of the accept/decline decision: who responded and (for declines) why.
+        public Guid? RespondedByUserId { get; set; }
+        public string? DeclineReason { get; set; }
+
         // Soft delete
         public bool IsDeleted { get; set; }
         public DateTime? DeleteTime { get; set; }

@@ -69,6 +69,13 @@ namespace JumpIn.Services.Services
 
         protected override IQueryable<Request> AddFilter(IQueryable<Request> query, RequestSearchObject search)
         {
+            // Owner scope (set server-side for non-admins): only requests where the
+            // user is sender or receiver.
+            if (search.InvolvedUserId.HasValue)
+                query = query.Where(r =>
+                    r.SenderId == search.InvolvedUserId.Value ||
+                    r.ReceiverId == search.InvolvedUserId.Value);
+
             if (search.SenderId.HasValue)
                 query = query.Where(r => r.SenderId == search.SenderId.Value);
 
@@ -176,7 +183,15 @@ namespace JumpIn.Services.Services
             }
         }
 
-        public async Task<RequestDTO> AcceptRequestAsync(Guid id)
+        // Centralized status transition guard: a request may leave Pending only once,
+        // moving to Accepted or Declined; any other transition is rejected.
+        private static void EnsureCanRespond(Request entity)
+        {
+            if (entity.Status != RequestStatus.Pending)
+                throw new UserException("This request has already been responded to.");
+        }
+
+        public async Task<RequestDTO> AcceptRequestAsync(Guid id, Guid respondedByUserId)
         {
             var entity = await _context.Requests
                 .Include(r => r.Sender)
@@ -187,11 +202,11 @@ namespace JumpIn.Services.Services
             if (entity == null)
                 throw new UserException("Request not found.");
 
-            if (entity.Status != RequestStatus.Pending)
-                throw new UserException("Only pending requests can be accepted.");
+            EnsureCanRespond(entity);
 
             entity.Status = RequestStatus.Accepted;
             entity.RespondedAt = DateTime.UtcNow;
+            entity.RespondedByUserId = respondedByUserId;
 
             // Deactivate the ad after accepting a request
             if (entity.Ad != null)
@@ -210,7 +225,7 @@ namespace JumpIn.Services.Services
             return MapToDto(entity);
         }
 
-        public async Task<RequestDTO> DeclineRequestAsync(Guid id)
+        public async Task<RequestDTO> DeclineRequestAsync(Guid id, Guid respondedByUserId, string? reason)
         {
             var entity = await _context.Requests
                 .Include(r => r.Sender)
@@ -221,17 +236,19 @@ namespace JumpIn.Services.Services
             if (entity == null)
                 throw new UserException("Request not found.");
 
-            if (entity.Status != RequestStatus.Pending)
-                throw new UserException("Only pending requests can be declined.");
+            EnsureCanRespond(entity);
 
             entity.Status = RequestStatus.Declined;
             entity.RespondedAt = DateTime.UtcNow;
+            entity.RespondedByUserId = respondedByUserId;
+            entity.DeclineReason = string.IsNullOrWhiteSpace(reason) ? null : reason.Trim();
             await _context.SaveChangesAsync();
 
+            var reasonSuffix = entity.DeclineReason != null ? $" Reason: {entity.DeclineReason}" : "";
             await _notificationService.CreateAsync(
                 entity.SenderId,
                 "Request declined",
-                $"Your request for '{entity.Ad?.Title}' was declined.",
+                $"Your request for '{entity.Ad?.Title}' was declined.{reasonSuffix}",
                 "REQUEST_DECLINED");
 
             return MapToDto(entity);
@@ -263,7 +280,9 @@ namespace JumpIn.Services.Services
                 Status = entity.Status.ToString().ToUpper(),
                 Message = entity.Message,
                 CreatedAt = entity.CreatedAt,
-                RespondedAt = entity.RespondedAt
+                RespondedAt = entity.RespondedAt,
+                RespondedByUserId = entity.RespondedByUserId,
+                DeclineReason = entity.DeclineReason
             };
 
             return dto;

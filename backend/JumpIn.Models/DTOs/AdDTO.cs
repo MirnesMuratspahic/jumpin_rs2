@@ -52,5 +52,9 @@ namespace JumpIn.Models.DTOs
         public string? UserProfileImage { get; set; }
         public decimal UserRating { get; set; }
         public bool IsVipOwner { get; set; }
+
+        // Human-readable explanation of WHY this ad was recommended (filled only by
+        // the recommendation endpoint). Null for normal listings.
+        public string? RecommendationReason { get; set; }
     }
 }

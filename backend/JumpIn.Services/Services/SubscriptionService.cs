@@ -1,4 +1,5 @@
 using JumpIn.Models.DTOs;
+using JumpIn.Models.Enums;
 using JumpIn.Models.Exceptions;
 using JumpIn.Models.Messages;
 using JumpIn.Services.Database;
@@ -45,6 +46,8 @@ namespace JumpIn.Services.Services
             if (user.IsVip)
                 throw new UserException("User already has an active VIP subscription.");
 
+            await EnsureNoPendingVipPaymentAsync(user.Id);
+
             var customerId = await GetOrCreateCustomerAsync(user);
 
             var session = await new SessionService().CreateAsync(new SessionCreateOptions
@@ -75,6 +78,8 @@ namespace JumpIn.Services.Services
                 Metadata = new Dictionary<string, string> { { "userId", user.Id.ToString() } }
             });
 
+            await RecordVipPaymentAsync(user, session.Id, PaymentStatus.Pending);
+
             return session.Url;
         }
 
@@ -83,6 +88,8 @@ namespace JumpIn.Services.Services
             var user = await RequireActiveUserAsync(userId);
             if (user.IsVip)
                 throw new UserException("User already has an active VIP subscription.");
+
+            await EnsureNoPendingVipPaymentAsync(user.Id);
 
             var customerId = await GetOrCreateCustomerAsync(user);
 
@@ -120,6 +127,10 @@ namespace JumpIn.Services.Services
             user.StripeSubscriptionId = subscription.Id;
             await _context.SaveChangesAsync();
 
+            // Record the financial event as a pending Payment; it is completed once
+            // the subscription is confirmed/paid (server-side).
+            await RecordVipPaymentAsync(user, subscription.Id, PaymentStatus.Pending);
+
             var clientSecret = subscription.LatestInvoice?.PaymentIntent?.ClientSecret;
             if (string.IsNullOrEmpty(clientSecret))
                 throw new UserException("Could not initialize payment.");
@@ -147,6 +158,8 @@ namespace JumpIn.Services.Services
             user.VipExpiresAt = DateTime.UtcNow.AddMonths(1);
             user.VipCancelAtPeriodEnd = false;
             await _context.SaveChangesAsync();
+
+            await RecordVipPaymentAsync(user, user.StripeSubscriptionId, PaymentStatus.Completed);
 
             await _notificationService.CreateAsync(
                 user.Id,
@@ -227,6 +240,11 @@ namespace JumpIn.Services.Services
                         await HandleInvoicePaid(invoice);
                     break;
 
+                case EventTypes.InvoicePaymentFailed:
+                    if (stripeEvent.Data.Object is Invoice failedInvoice)
+                        await HandleInvoicePaymentFailed(failedInvoice);
+                    break;
+
                 case EventTypes.CustomerSubscriptionDeleted:
                     if (stripeEvent.Data.Object is Subscription subscription)
                         await HandleSubscriptionCancelled(subscription);
@@ -244,6 +262,57 @@ namespace JumpIn.Services.Services
             if (user == null || user.IsDeleted)
                 throw new UserException("User not found.");
             return user;
+        }
+
+        // A user must not have more than one open VIP payment attempt at a time.
+        private async Task EnsureNoPendingVipPaymentAsync(Guid userId)
+        {
+            var hasPending = await _context.Payments.AnyAsync(p =>
+                p.UserId == userId &&
+                p.PaymentType == PaymentType.VipSubscription &&
+                p.Status == PaymentStatus.Pending);
+
+            if (hasPending)
+                throw new UserException("You already have a pending VIP payment. Complete or cancel it before starting a new one.");
+        }
+
+        // Creates or updates the Payment row that mirrors the real Stripe charge so
+        // the Payment history reflects actual financial events (not a separate CRUD).
+        private async Task RecordVipPaymentAsync(User user, string? stripeId, PaymentStatus status)
+        {
+            // Advance the user's currently OPEN (pending) payment if one exists — this
+            // is the initial subscription attempt being confirmed or failing. We never
+            // mutate an already-finalized (completed/failed) row, so monthly renewals
+            // and standalone failures each create their own new Payment record.
+            var pending = await _context.Payments.FirstOrDefaultAsync(p =>
+                p.UserId == user.Id &&
+                p.PaymentType == PaymentType.VipSubscription &&
+                p.Status == PaymentStatus.Pending);
+
+            if (pending != null)
+            {
+                pending.Status = status;
+                if (!string.IsNullOrEmpty(stripeId)) pending.StripePaymentId = stripeId;
+                if (status == PaymentStatus.Completed) pending.CompletedAt = DateTime.UtcNow;
+                await _context.SaveChangesAsync();
+                return;
+            }
+
+            var payment = new Payment
+            {
+                Id = Guid.NewGuid(),
+                UserId = user.Id,
+                Amount = PriceAmount / 100m,
+                Currency = Currency.ToUpper(),
+                PaymentType = PaymentType.VipSubscription,
+                Status = status,
+                StripePaymentId = stripeId,
+                Description = "JumpIn VIP Membership (monthly)",
+                CreatedAt = DateTime.UtcNow,
+                CompletedAt = status == PaymentStatus.Completed ? DateTime.UtcNow : null
+            };
+            _context.Payments.Add(payment);
+            await _context.SaveChangesAsync();
         }
 
         private static SubscriptionStatusResult ToStatus(User user) => new()
@@ -293,7 +362,28 @@ namespace JumpIn.Services.Services
                 user.IsVip = true;
                 user.VipExpiresAt = DateTime.UtcNow.AddMonths(1);
                 await _context.SaveChangesAsync();
+
+                // Each paid invoice (initial + monthly renewals) is a completed payment.
+                await RecordVipPaymentAsync(user, subscriptionId, PaymentStatus.Completed);
             }
+        }
+
+        private async Task HandleInvoicePaymentFailed(Invoice invoice)
+        {
+            var subscriptionId = invoice.SubscriptionId;
+            if (string.IsNullOrEmpty(subscriptionId)) return;
+
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.StripeSubscriptionId == subscriptionId);
+            if (user == null) return;
+
+            // Reflect the failed charge in the Payment history and let the user know.
+            await RecordVipPaymentAsync(user, subscriptionId, PaymentStatus.Failed);
+
+            await _notificationService.CreateAsync(
+                user.Id,
+                "Payment failed",
+                "Your VIP subscription payment could not be processed. Please update your payment method to keep VIP active.",
+                "VIP_PAYMENT_FAILED");
         }
 
         private async Task HandleSubscriptionCancelled(Subscription subscription)
@@ -322,6 +412,8 @@ namespace JumpIn.Services.Services
             user.VipCancelAtPeriodEnd = false;
             user.StripeSubscriptionId = subscriptionId;
             await _context.SaveChangesAsync();
+
+            await RecordVipPaymentAsync(user, subscriptionId, PaymentStatus.Completed);
 
             await _notificationService.CreateAsync(
                 user.Id,

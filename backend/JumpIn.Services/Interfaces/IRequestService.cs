@@ -7,7 +7,7 @@ namespace JumpIn.Services.Interfaces
 {
     public interface IRequestService : ICRUDService<RequestDTO, RequestSearchObject, RequestInsertRequest, RequestUpdateRequest>
     {
-        Task<RequestDTO> AcceptRequestAsync(Guid id);
-        Task<RequestDTO> DeclineRequestAsync(Guid id);
+        Task<RequestDTO> AcceptRequestAsync(Guid id, Guid respondedByUserId);
+        Task<RequestDTO> DeclineRequestAsync(Guid id, Guid respondedByUserId, string? reason);
     }
 }

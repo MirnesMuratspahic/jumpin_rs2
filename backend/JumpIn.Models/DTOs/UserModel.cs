@@ -13,6 +13,8 @@ namespace JumpIn.Models.DTOs
         public string LastName { get; set; }
         public string Email { get; set; }
         public string? Phone { get; set; }
+        public bool IsPhoneVerified { get; set; }
+        public DateTime? PhoneVerifiedAt { get; set; }
         public string? ProfileImageUrl { get; set; }
         public DateTime RegistrationDate { get; set; }
         public DateTime? LastLogin { get; set; }

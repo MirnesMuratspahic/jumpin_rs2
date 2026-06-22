@@ -10,11 +10,12 @@ namespace JumpIn.Services.Interfaces
         Task<UserModel> LoginAsync(LoginRequest request);
         Task<UserModel> BlockUserAsync(Guid id, BlockUserRequest request);
         Task<UserModel> UnblockUserAsync(Guid id);
-        Task<UserModel> ActivateVipAsync(Guid id);
         Task<UserStatistics> GetUserStatisticsAsync(Guid id);
         Task LogoutAsync(Guid id);
         Task ChangePasswordAsync(Guid id, ChangePasswordRequest request, bool requireCurrentPassword);
         Task RequestPasswordResetAsync(string email);
         Task ResetPasswordAsync(ResetPasswordRequest request);
+        Task SendPhoneVerificationCodeAsync(Guid id);
+        Task<UserModel> VerifyPhoneAsync(Guid id, string? code);
     }
 }

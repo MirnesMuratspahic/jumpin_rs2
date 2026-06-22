@@ -4,6 +4,7 @@ using JumpIn.Services.Database;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace JumpIn.Services.Migrations
 {
     [DbContext(typeof(JumpInDbContext))]
-    partial class JumpInDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260622092706_AddRequestAuditFields")]
+    partial class AddRequestAuditFields
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -517,9 +520,6 @@ namespace JumpIn.Services.Migrations
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("bit");
 
-                    b.Property<bool>("IsPhoneVerified")
-                        .HasColumnType("bit");
-
                     b.Property<bool>("IsVip")
                         .HasColumnType("bit");
 
@@ -536,15 +536,6 @@ namespace JumpIn.Services.Migrations
 
                     b.Property<string>("Phone")
                         .HasColumnType("nvarchar(max)");
-
-                    b.Property<string>("PhoneVerificationCodeHash")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<DateTime?>("PhoneVerificationExpiresAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<DateTime?>("PhoneVerifiedAt")
-                        .HasColumnType("datetime2");
 
                     b.Property<string>("ProfileImageUrl")
                         .HasColumnType("nvarchar(max)");

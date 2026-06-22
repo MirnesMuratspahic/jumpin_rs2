@@ -1,4 +1,5 @@
 using JumpIn.Models.DTOs;
+using JumpIn.Models.Enums;
 using JumpIn.Models.Exceptions;
 using JumpIn.Models.HelperClasses;
 using JumpIn.Models.Requests;
@@ -78,6 +79,26 @@ namespace JumpIn.Services.Services
             var reviewedUser = _context.Users.Find(entity.ReviewedUserId);
             if (reviewedUser == null || reviewedUser.IsDeleted)
                 throw new UserException("Reviewed user not found.");
+
+            // A review is a reputation signal and must be tied to a real interaction:
+            // there has to be an accepted request between the two users (either as
+            // sender or receiver).
+            var hasAcceptedInteraction = _context.Requests.Any(r =>
+                !r.IsDeleted &&
+                r.Status == RequestStatus.Accepted &&
+                ((r.SenderId == request.ReviewerId && r.ReceiverId == entity.ReviewedUserId) ||
+                 (r.SenderId == entity.ReviewedUserId && r.ReceiverId == request.ReviewerId)));
+
+            if (!hasAcceptedInteraction)
+                throw new UserException("You can only review a user you have had an accepted request with.");
+
+            // One review per reviewer → reviewed user; updating an existing review is
+            // done through the edit (update) flow, not by inserting a second one.
+            var alreadyReviewed = _context.Reviews.Any(r =>
+                r.ReviewerId == request.ReviewerId && r.ReviewedUserId == entity.ReviewedUserId);
+
+            if (alreadyReviewed)
+                throw new UserException("You have already reviewed this user.");
 
             entity.CreatedAt = DateTime.UtcNow;
             entity.ReviewerEmail = reviewer.Email;

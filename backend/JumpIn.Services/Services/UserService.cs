@@ -110,7 +110,15 @@ namespace JumpIn.Services.Services
 
             if (!string.IsNullOrEmpty(request.FirstName)) entity.FirstName = request.FirstName;
             if (!string.IsNullOrEmpty(request.LastName)) entity.LastName = request.LastName;
-            if (request.Phone != null) entity.Phone = request.Phone;
+            if (request.Phone != null && request.Phone != entity.Phone)
+            {
+                entity.Phone = request.Phone;
+                // Changing the number invalidates any prior verification.
+                entity.IsPhoneVerified = false;
+                entity.PhoneVerifiedAt = null;
+                entity.PhoneVerificationCodeHash = null;
+                entity.PhoneVerificationExpiresAt = null;
+            }
             if (request.ProfileImageUrl != null) entity.ProfileImageUrl = request.ProfileImageUrl;
         }
 
@@ -258,6 +266,72 @@ namespace JumpIn.Services.Services
             await _context.SaveChangesAsync();
         }
 
+        public async Task SendPhoneVerificationCodeAsync(Guid id)
+        {
+            var user = await _context.Users.FindAsync(id);
+            if (user == null || user.IsDeleted)
+                throw new UserException("User not found.");
+
+            if (string.IsNullOrWhiteSpace(user.Phone))
+                throw new UserException("Add a phone number to your profile before verifying it.");
+
+            if (user.IsPhoneVerified)
+                throw new UserException("Your phone number is already verified.");
+
+            // Cryptographically-secure 6-digit code; only its hash is stored.
+            var code = RandomNumberGenerator.GetInt32(0, 1_000_000).ToString("D6");
+            user.PhoneVerificationCodeHash = BCrypt.Net.BCrypt.HashPassword(code);
+            user.PhoneVerificationExpiresAt = DateTime.UtcNow.AddMinutes(15);
+            await _context.SaveChangesAsync();
+
+            // Sandbox delivery (acceptable for the project): log the code server-side
+            // and also email it to the user so the flow is demonstrable end-to-end.
+            // A real deployment would send this via an SMS gateway.
+            _logger.LogInformation("[SANDBOX SMS] Phone verification code for {Phone}: {Code}", user.Phone, code);
+            try
+            {
+                await _messagePublisher.PublishEmailAsync(new EmailMessage
+                {
+                    To = user.Email,
+                    Subject = "JumpIn phone verification code",
+                    Body = $"<h2>Phone verification</h2><p>Your phone verification code is <strong>{code}</strong>. It expires in 15 minutes.</p>"
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to send phone verification code for user {UserId}.", user.Id);
+            }
+        }
+
+        public async Task<UserModel> VerifyPhoneAsync(Guid id, string? code)
+        {
+            var user = await _context.Users.FindAsync(id);
+            if (user == null || user.IsDeleted)
+                throw new UserException("User not found.");
+
+            if (user.IsPhoneVerified)
+                return user.Adapt<UserModel>();
+
+            if (string.IsNullOrEmpty(user.PhoneVerificationCodeHash) ||
+                user.PhoneVerificationExpiresAt == null)
+                throw new UserException("Request a verification code first.");
+
+            if (user.PhoneVerificationExpiresAt < DateTime.UtcNow)
+                throw new UserException("The verification code has expired. Please request a new one.");
+
+            if (string.IsNullOrEmpty(code) ||
+                !BCrypt.Net.BCrypt.Verify(code, user.PhoneVerificationCodeHash))
+                throw new UserException("Invalid verification code.");
+
+            user.IsPhoneVerified = true;
+            user.PhoneVerifiedAt = DateTime.UtcNow;
+            user.PhoneVerificationCodeHash = null;
+            user.PhoneVerificationExpiresAt = null;
+            await _context.SaveChangesAsync();
+
+            return user.Adapt<UserModel>();
+        }
+
         public async Task<UserModel> BlockUserAsync(Guid id, BlockUserRequest request)
         {
             var user = await _context.Users.FindAsync(id);
@@ -281,20 +355,6 @@ namespace JumpIn.Services.Services
             user.Status = UserStatus.Active;
             user.BlockReason = null;
             user.BlockedAt = null;
-            await _context.SaveChangesAsync();
-
-            return user.Adapt<UserModel>();
-        }
-
-        public async Task<UserModel> ActivateVipAsync(Guid id)
-        {
-            var user = await _context.Users.FindAsync(id);
-            if (user == null || user.IsDeleted)
-                throw new UserException("User not found.");
-
-            user.IsVip = true;
-            user.VipActivatedAt = DateTime.UtcNow;
-            user.VipExpiresAt = DateTime.UtcNow.AddMonths(1);
             await _context.SaveChangesAsync();
 
             return user.Adapt<UserModel>();

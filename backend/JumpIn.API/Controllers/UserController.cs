@@ -79,6 +79,21 @@ namespace JumpIn.API.Controllers
             return Ok(new { message = "Password changed successfully." });
         }
 
+        // The full user list (with email/phone/role/status) is admin-only.
+        [Authorize(Roles = RoleNames.Admin)]
+        public override async Task<PagedResult<UserModel>> GetList([FromQuery] UserSearchObject search)
+        {
+            return await base.GetList(search);
+        }
+
+        // The full user record (email, phone, role, status…) is only for the owner
+        // or an admin. Other users must use the public profile endpoints below.
+        public override UserModel GetById(Guid id)
+        {
+            EnsureOwnerOrAdmin(id);
+            return _service.GetById(id);
+        }
+
         [Authorize(Roles = RoleNames.Admin)]
         public override UserModel Insert([FromBody] UserInsertRequest request)
         {
@@ -112,19 +127,31 @@ namespace JumpIn.API.Controllers
             return await _userService.UnblockUserAsync(id);
         }
 
-        [HttpPost("{id}/activate-vip")]
-        public async Task<UserModel> ActivateVip(Guid id)
-        {
-            EnsureOwnerOrAdmin(id);
-            return await _userService.ActivateVipAsync(id);
-        }
-
         [HttpGet("{id}/statistics")]
         public async Task<UserStatistics> GetStatistics(Guid id)
         {
             return await _userService.GetUserStatisticsAsync(id);
         }
 
+        // SMS phone verification — sends a code to the user's phone (sandbox delivery).
+        [HttpPost("{id}/send-phone-code")]
+        public async Task<IActionResult> SendPhoneCode(Guid id)
+        {
+            EnsureOwnerOrAdmin(id);
+            await _userService.SendPhoneVerificationCodeAsync(id);
+            return Ok(new { message = "A verification code has been sent." });
+        }
+
+        // Confirms the code and marks the phone number as verified.
+        [HttpPost("{id}/verify-phone")]
+        public async Task<UserModel> VerifyPhone(Guid id, [FromBody] VerifyPhoneRequest request)
+        {
+            EnsureOwnerOrAdmin(id);
+            return await _userService.VerifyPhoneAsync(id, request?.Code);
+        }
+
+        // Public profile (any authenticated user). Returns ONLY public-safe fields —
+        // no email/phone/role/status — plus public statistics.
         [HttpGet("{id}/profile")]
         public async Task<IActionResult> GetUserProfile(Guid id)
         {
@@ -136,10 +163,34 @@ namespace JumpIn.API.Controllers
 
             return Ok(new
             {
-                user,
+                user = ToPublicProfile(user),
                 statistics
             });
         }
+
+        // Public profile object on its own (used by the mobile "view user" screen).
+        [HttpGet("{id}/public")]
+        public IActionResult GetPublicProfile(Guid id)
+        {
+            var user = _service.GetById(id);
+            if (user == null)
+                return NotFound("User not found");
+
+            return Ok(ToPublicProfile(user));
+        }
+
+        private static PublicUserProfileDTO ToPublicProfile(UserModel user) => new()
+        {
+            Id = user.Id,
+            FirstName = user.FirstName,
+            LastName = user.LastName,
+            ProfileImageUrl = user.ProfileImageUrl,
+            RegistrationDate = user.RegistrationDate,
+            IsVip = user.IsVip,
+            AverageRating = user.AverageRating,
+            TotalReviews = user.TotalReviews,
+            TotalAds = user.TotalAds
+        };
 
         [HttpPost("upload-image")]
         public async Task<IActionResult> UploadProfileImage(IFormFile file, [FromServices] IWebHostEnvironment environment)

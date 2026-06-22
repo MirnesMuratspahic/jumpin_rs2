@@ -24,5 +24,7 @@ namespace JumpIn.Models.DTOs
         public string? Message { get; set; }
         public DateTime CreatedAt { get; set; }
         public DateTime? RespondedAt { get; set; }
+        public Guid? RespondedByUserId { get; set; }
+        public string? DeclineReason { get; set; }
     }
 }
